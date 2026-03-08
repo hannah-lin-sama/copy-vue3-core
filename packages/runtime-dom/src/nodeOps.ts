@@ -41,14 +41,17 @@ const doc = (typeof document !== 'undefined' ? document : null) as Document
 
 const templateContainer = doc && /*@__PURE__*/ doc.createElement('template')
 
+// 节点操作方法集合，用于 DOM 操作
 export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
   insert: (child, parent, anchor) => {
+    // 插入子节点到父节点中，锚点为 anchor 或 null
     parent.insertBefore(child, anchor || null)
   },
 
   remove: child => {
     const parent = child.parentNode
     if (parent) {
+      // 从父节点中移除子节点ß
       parent.removeChild(child)
     }
   },
@@ -64,32 +67,33 @@ export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
             : doc.createElement(tag)
 
     if (tag === 'select' && props && props.multiple != null) {
+      // 处理 select 元素的 multiple 属性
       ;(el as HTMLSelectElement).setAttribute('multiple', props.multiple)
     }
 
     return el
   },
-
+  // 创建文本节点
   createText: text => doc.createTextNode(text),
-
+  // 创建注释节点
   createComment: text => doc.createComment(text),
 
   setText: (node, text) => {
-    node.nodeValue = text
+    node.nodeValue = text // 设置文本节点的文本内容
   },
 
   setElementText: (el, text) => {
-    el.textContent = text
+    el.textContent = text // 设置元素的文本内容
   },
 
-  parentNode: node => node.parentNode as Element | null,
+  parentNode: node => node.parentNode as Element | null, // 获取节点的父节点
 
-  nextSibling: node => node.nextSibling,
+  nextSibling: node => node.nextSibling, // 获取节点的下一个兄弟节点
 
-  querySelector: selector => doc.querySelector(selector),
+  querySelector: selector => doc.querySelector(selector), // 查询选择器
 
   setScopeId(el, id) {
-    el.setAttribute(id, '')
+    el.setAttribute(id, '') // 设置元素的作用域 ID 属性
   },
 
   // __UNSAFE__

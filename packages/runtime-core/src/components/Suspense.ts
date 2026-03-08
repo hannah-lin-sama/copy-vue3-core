@@ -254,6 +254,18 @@ function mountSuspense(
   }
 }
 
+/**
+ *
+ * @param n1 旧节点
+ * @param n2 新节点
+ * @param container 容器元素
+ * @param anchor 锚点元素
+ * @param parentComponent 父组件实例
+ * @param namespace 元素命名空间
+ * @param slotScopeIds 插槽作用域 ID 数组
+ * @param optimized 是否开启优化模式
+ * @param param8 渲染器内部实现
+ */
 function patchSuspense(
   n1: VNode,
   n2: VNode,
@@ -272,6 +284,7 @@ function patchSuspense(
   const newFallback = n2.ssFallback!
 
   const { activeBranch, pendingBranch, isInFallback, isHydrating } = suspense
+
   if (pendingBranch) {
     suspense.pendingBranch = newBranch
     if (isSameVNodeType(pendingBranch, newBranch)) {

@@ -382,6 +382,19 @@ function baseCreateRenderer(
     insertStaticContent: hostInsertStaticContent,
   } = options
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 容器元素
+   * @param anchor 锚点元素
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 数组
+   * @param optimized 是否开启优化模式
+   * @returns
+   */
   // Note: functions inside this closure should use `const xxx = () => {}`
   // style in order to prevent being inlined by minifiers.
   const patch: PatchFn = (
@@ -503,6 +516,13 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 容器元素
+   * @param anchor 锚点元素
+   */
   const processText: ProcessTextOrCommentFn = (n1, n2, container, anchor) => {
     if (n1 == null) {
       hostInsert(
@@ -518,6 +538,13 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 容器元素
+   * @param anchor 锚点元素
+   */
   const processCommentNode: ProcessTextOrCommentFn = (
     n1,
     n2,
@@ -536,6 +563,13 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n2 新节点
+   * @param container 容器元素
+   * @param anchor 锚点元素
+   * @param namespace 元素命名空间
+   */
   const mountStaticNode = (
     n2: VNode,
     container: RendererElement,
@@ -554,6 +588,9 @@ function baseCreateRenderer(
     )
   }
 
+  /**
+   * 静态节点的补丁函数
+   */
   /**
    * Dev / HMR only
    */
@@ -581,6 +618,12 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param param0 包含 el 和 anchor 属性的 VNode 对象
+   * @param container 容器元素
+   * @param nextSibling 下一个兄弟节点
+   */
   const moveStaticNode = (
     { el, anchor }: VNode,
     container: RendererElement,
@@ -595,6 +638,10 @@ function baseCreateRenderer(
     hostInsert(anchor!, container, nextSibling)
   }
 
+  /**
+   * 删除静态节点
+   * @param param0 包含 el 和 anchor 属性的 VNode 对象
+   */
   const removeStaticNode = ({ el, anchor }: VNode) => {
     let next
     while (el && el !== anchor) {
@@ -605,6 +652,18 @@ function baseCreateRenderer(
     hostRemove(anchor!)
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 容器元素
+   * @param anchor 锚点元素
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param optimized 是否开启优化模式
+   */
   const processElement = (
     n1: VNode | null,
     n2: VNode,
@@ -754,6 +813,14 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param el 渲染元素
+   * @param vnode 虚拟节点
+   * @param scopeId 作用域 ID
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param parentComponent 父组件实例
+   */
   const setScopeId = (
     el: RendererElement,
     vnode: VNode,
@@ -796,6 +863,18 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param children 子节点数组
+   * @param container 容器元素
+   * @param anchor 锚点元素
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param optimized 是否开启优化模式
+   * @param start 起始索引
+   */
   const mountChildren: MountChildrenFn = (
     children,
     container,
@@ -825,6 +904,16 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param optimized 是否开启优化模式
+   */
   const patchElement = (
     n1: VNode,
     n2: VNode,
@@ -965,6 +1054,16 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param oldChildren 旧子节点数组
+   * @param newChildren 新子节点数组
+   * @param fallbackContainer 回退容器
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   */
   // The fast path for blocks.
   const patchBlockChildren: PatchBlockChildrenFn = (
     oldChildren,
@@ -1010,6 +1109,14 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param el 渲染元素
+   * @param oldProps 旧属性
+   * @param newProps 新属性
+   * @param parentComponent 父组件实例
+   * @param namespace 元素命名空间
+   */
   const patchProps = (
     el: RendererElement,
     oldProps: Data,
@@ -1048,6 +1155,18 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 渲染目标容器
+   * @param anchor 锚点节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 数组
+   * @param optimized 是否开启优化模式
+   */
   const processFragment = (
     n1: VNode | null,
     n2: VNode,
@@ -1156,6 +1275,18 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 渲染目标容器
+   * @param anchor 锚点节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 数组
+   * @param optimized 是否开启优化模式
+   */
   const processComponent = (
     n1: VNode | null,
     n2: VNode,
@@ -1193,6 +1324,16 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param initialVNode 初始虚拟节点
+   * @param container 渲染目标容器
+   * @param anchor 锚点节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param optimized 是否开启优化模式
+   */
   const mountComponent: MountComponentFn = (
     initialVNode,
     container,
@@ -1273,6 +1414,13 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param optimized 是否开启优化模式
+   * @returns
+   */
   const updateComponent = (n1: VNode, n2: VNode, optimized: boolean) => {
     const instance = (n2.component = n1.component)!
     if (shouldUpdateComponent(n1, n2, optimized)) {
@@ -1304,6 +1452,16 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param instance 组件实例
+   * @param initialVNode 初始虚拟节点
+   * @param container 渲染目标容器
+   * @param anchor 锚点节点
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param optimized 是否开启优化模式
+   */
   const setupRenderEffect: SetupRenderEffectFn = (
     instance,
     initialVNode,
@@ -1611,6 +1769,12 @@ function baseCreateRenderer(
     update()
   }
 
+  /**
+   *
+   * @param instance 组件实例
+   * @param nextVNode 新节点
+   * @param optimized 是否开启优化模式
+   */
   const updateComponentPreRender = (
     instance: ComponentInternalInstance,
     nextVNode: VNode,
@@ -1630,6 +1794,19 @@ function baseCreateRenderer(
     resetTracking()
   }
 
+  /**
+   *
+   * @param n1 旧节点
+   * @param n2 新节点
+   * @param container 渲染目标容器
+   * @param anchor 锚点节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param optimized 是否开启优化模式
+   * @returns
+   */
   const patchChildren: PatchChildrenFn = (
     n1,
     n2,
@@ -1732,6 +1909,18 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param c1 旧节点数组
+   * @param c2 新节点数组
+   * @param container 渲染目标容器
+   * @param anchor 锚点节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param optimized 是否开启优化模式
+   */
   const patchUnkeyedChildren = (
     c1: VNode[],
     c2: VNodeArrayChildren,
@@ -1791,6 +1980,18 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param c1 旧节点数组
+   * @param c2 新节点数组
+   * @param container 渲染目标容器
+   * @param parentAnchor 父锚点节点
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param namespace 元素命名空间
+   * @param slotScopeIds 插槽作用域 ID 列表
+   * @param optimized 是否开启优化模式
+   */
   // can be all-keyed or mixed
   const patchKeyedChildren = (
     c1: VNode[],
@@ -2139,11 +2340,22 @@ function baseCreateRenderer(
         }
       }
     } else {
-      // 无过渡动画：直接插入 DOM（核心操作）
+      /**
+       * 无过渡动画时，直接插入
+       */
       hostInsert(el!, container, anchor)
     }
   }
 
+  /**
+   * 处理 VNode 从「组件实例销毁、DOM 移除、指令钩子执行、缓存清理」的全生命周期卸载
+   * @param vnode 要卸载的 VNode
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 关联的 Suspense 实例（异步组件 / 懒加载场景）
+   * @param doRemove 是否直接从 DOM 中移除节点（默认 false）
+   * @param optimized 是否开启优化模式（默认 false）
+   * @returns
+   */
   const unmount: UnmountFn = (
     vnode,
     parentComponent,
@@ -2157,35 +2369,42 @@ function baseCreateRenderer(
       ref,
       children,
       dynamicChildren,
-      shapeFlag,
-      patchFlag,
+      shapeFlag, // 核心类型标记，用于区分 VNode 是「组件」「元素」「Suspense」等
+      patchFlag, // 优化标记，BAIL 表示当前 VNode 无法优化，需走全量卸载逻辑
       dirs,
       cacheIndex,
     } = vnode
 
+    // 若 patchFlag 为 BAIL（退出优化），则关闭优化模式
     if (patchFlag === PatchFlags.BAIL) {
       optimized = false
     }
 
+    // 清理 Ref 引用（避免内存泄漏）
     // unset ref
     if (ref != null) {
-      pauseTracking()
-      setRef(ref, null, parentSuspense, vnode, true)
-      resetTracking()
+      pauseTracking() // 暂停响应式追踪（避免触发不必要的依赖更新）
+      setRef(ref, null, parentSuspense, vnode, true) // 将 ref 置为 null
+      resetTracking() // 恢复响应式追踪
     }
 
+    // 清理渲染缓存
     // #6593 should clean memo cache when unmount
     if (cacheIndex != null) {
       parentComponent!.renderCache[cacheIndex] = undefined
     }
 
+    // KeepAlive 组件特殊处理（核心分支）
     if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {
+      // 调用 deactivate 方法：仅失活组件（保留 DOM / 实例，移到隐藏容器），而非彻底卸载
       ;(parentComponent!.ctx as KeepAliveContext).deactivate(vnode)
+      // return 跳过「组件卸载、DOM 移除」，这是 KeepAlive 缓存的核心！
       return
     }
 
+    // 执行 VNode 前置卸载钩子
     const shouldInvokeDirs = shapeFlag & ShapeFlags.ELEMENT && dirs
-    const shouldInvokeVnodeHook = !isAsyncWrapper(vnode)
+    const shouldInvokeVnodeHook = !isAsyncWrapper(vnode) // 是否 非异步包装组件
 
     let vnodeHook: VNodeHook | undefined | null
     if (
@@ -2195,18 +2414,25 @@ function baseCreateRenderer(
       invokeVNodeHook(vnodeHook, parentComponent, vnode)
     }
 
+    // 分类型卸载 VNode（核心分支）
+    // 1、组件类型 VNode（普通组件，非 KeepAlive）
     if (shapeFlag & ShapeFlags.COMPONENT) {
       unmountComponent(vnode.component!, parentSuspense, doRemove)
+
+      // 2、非组件类型 VNode（元素 / Suspense/Teleport/Fragment）
     } else {
+      // 2-1 Suspense 类型
       if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
         vnode.suspense!.unmount(parentSuspense, doRemove)
         return
       }
 
+      // 2-2 元素类型 + 有指令：执行指令 beforeUnmount 钩子
       if (shouldInvokeDirs) {
         invokeDirectiveHook(vnode, null, parentComponent, 'beforeUnmount')
       }
 
+      // 2-3 Teleport 类型：调用 Teleport 专属 remove 方法
       if (shapeFlag & ShapeFlags.TELEPORT) {
         ;(vnode.type as typeof TeleportImpl).remove(
           vnode,
@@ -2215,15 +2441,11 @@ function baseCreateRenderer(
           internals,
           doRemove,
         )
+
+        // 优化模式下的 Block 节点：仅卸载动态子节点（性能优化）
       } else if (
         dynamicChildren &&
-        // #5154
-        // when v-once is used inside a block, setBlockTracking(-1) marks the
-        // parent block with hasOnce: true
-        // so that it doesn't take the fast path during unmount - otherwise
-        // components nested in v-once are never unmounted.
         !dynamicChildren.hasOnce &&
-        // #1153: fast path should not be taken for non-stable (v-for) fragments
         (type !== Fragment ||
           (patchFlag > 0 && patchFlag & PatchFlags.STABLE_FRAGMENT))
       ) {
@@ -2235,6 +2457,8 @@ function baseCreateRenderer(
           false,
           true,
         )
+
+        // 2-4 Fragment/数组子节点：全量卸载子节点
       } else if (
         (type === Fragment &&
           patchFlag &
@@ -2244,11 +2468,13 @@ function baseCreateRenderer(
         unmountChildren(children as VNode[], parentComponent, parentSuspense)
       }
 
+      // 彻底移除 DOM 节点
       if (doRemove) {
         remove(vnode)
       }
     }
 
+    // 执行后置卸载钩子（异步队列）
     if (
       (shouldInvokeVnodeHook &&
         (vnodeHook = props && props.onVnodeUnmounted)) ||
@@ -2262,9 +2488,17 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   * Vue3 渲染器 负责移除 VNode 对应真实 DOM 节点
+   * @param vnode
+   * @returns
+   */
   const remove: RemoveFn = vnode => {
     const { type, el, anchor, transition } = vnode
+
+    // 处理 Fragment 类型 VNode（无单个根 DOM，需移除所有子节点）
     if (type === Fragment) {
+      // 开发环境 - 根 Fragment + 过渡动画（特殊处理注释节点）
       if (
         __DEV__ &&
         vnode.patchFlag > 0 &&
@@ -2274,17 +2508,18 @@ function baseCreateRenderer(
       ) {
         ;(vnode.children as VNode[]).forEach(child => {
           if (child.type === Comment) {
-            hostRemove(child.el!)
+            hostRemove(child.el!) // 移除注释节点（Vue 内部占位用）
           } else {
-            remove(child)
+            remove(child) // 递归移除子 VNode 的 DOM
           }
         })
       } else {
         removeFragment(el!, anchor!)
       }
-      return
+      return // 终止后续逻辑
     }
 
+    // 处理静态节点（特殊处理）
     if (type === Static) {
       removeStaticNode(vnode)
       return
@@ -2297,6 +2532,7 @@ function baseCreateRenderer(
       }
     }
 
+    // 处理元素类型 VNode 过渡动画（特殊处理）
     if (
       vnode.shapeFlag & ShapeFlags.ELEMENT &&
       transition &&
@@ -2314,6 +2550,11 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param cur 当前节点
+   * @param end 结束节点
+   */
   const removeFragment = (cur: RendererNode, end: RendererNode) => {
     // For fragments, directly remove all contained DOM nodes.
     // (fragment child nodes cannot have transition)
@@ -2326,24 +2567,36 @@ function baseCreateRenderer(
     hostRemove(end)
   }
 
+  /**
+   * Vue3 渲染器 负责销毁组件实例
+   * 「按生命周期执行组件卸载钩子、清理组件作用域副作用、终止调度任务、递归卸载组件子树」，
+   *  是普通组件（非 KeepAlive）卸载的最终执行者。
+   * @param instance 组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param doRemove 是否执行 DOM 移除操作
+   */
   const unmountComponent = (
     instance: ComponentInternalInstance,
     parentSuspense: SuspenseBoundary | null,
     doRemove?: boolean,
   ) => {
+    // 开发环境 - 移除 HMR（热更新）注册（避免热更新异常）
     if (__DEV__ && instance.type.__hmrId) {
       unregisterHMR(instance)
     }
 
+    // 解构组件实例的核心属性，清理挂载相关标记
     const { bum, scope, job, subTree, um, m, a } = instance
-    invalidateMount(m)
-    invalidateMount(a)
+    invalidateMount(m) // 失效挂载（mount）相关标记
+    invalidateMount(a) // 失效激活（activate）相关标记
 
     // beforeUnmount hook
+    // 同步执行 beforeUnmount 钩子（组件卸载前）
     if (bum) {
       invokeArrayFns(bum)
     }
 
+    // 兼容 Vue2 生命周期（hook:beforeDestroy）
     if (
       __COMPAT__ &&
       isCompatEnabled(DeprecationTypes.INSTANCE_EVENT_HOOKS, instance)
@@ -2351,20 +2604,27 @@ function baseCreateRenderer(
       instance.emit('hook:beforeDestroy')
     }
 
+    // 停止组件作用域的所有响应式副作用（核心！）
     // stop effects in component scope
     scope.stop()
 
+    // 终止组件的调度任务，递归卸载子树
     // job may be null if a component is unmounted before its async
     // setup has resolved.
     if (job) {
       // so that scheduler will no longer invoke it
+      // 标记任务为已销毁，调度器不再执行
       job.flags! |= SchedulerJobFlags.DISPOSED
+      // 递归卸载组件的根子树（subTree 是组件渲染的真实内容）
       unmount(subTree, instance, parentSuspense, doRemove)
     }
+    // 异步执行 unmounted 钩子（组件卸载后）
     // unmounted hook
     if (um) {
-      queuePostRenderEffect(um, parentSuspense)
+      queuePostRenderEffect(um, parentSuspense) // 加入后置渲染队列
     }
+
+    // 兼容 Vue2 生命周期（hook:destroyed）
     if (
       __COMPAT__ &&
       isCompatEnabled(DeprecationTypes.INSTANCE_EVENT_HOOKS, instance)
@@ -2374,15 +2634,27 @@ function baseCreateRenderer(
         parentSuspense,
       )
     }
+
+    // 标记组件为已卸载（安全保障）
     queuePostRenderEffect(() => {
       instance.isUnmounted = true
     }, parentSuspense)
 
+    // 开发环境/调试工具 - 通知组件已移除
     if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
       devtoolsComponentRemoved(instance)
     }
   }
 
+  /**
+   *
+   * @param children 子节点数组
+   * @param parentComponent 父组件实例
+   * @param parentSuspense 父级 Suspense 边界
+   * @param doRemove 是否执行 DOM 移除操作
+   * @param optimized 是否开启优化模式
+   * @param start 起始索引
+   */
   const unmountChildren: UnmountChildrenFn = (
     children,
     parentComponent,
@@ -2396,6 +2668,11 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   *
+   * @param vnode 当前节点
+   * @returns 下一个节点
+   */
   const getNextHostNode: NextFn = vnode => {
     if (vnode.shapeFlag & ShapeFlags.COMPONENT) {
       return getNextHostNode(vnode.component!.subTree)
@@ -2412,6 +2689,13 @@ function baseCreateRenderer(
   }
 
   let isFlushing = false
+
+  /**
+   *
+   * @param vnode 要渲染的虚拟节点
+   * @param container 渲染目标容器
+   * @param namespace 元素命名空间
+   */
   const render: RootRenderFunction = (vnode, container, namespace) => {
     let instance
     if (vnode == null) {
