@@ -401,6 +401,7 @@ const KeepAliveImpl: ComponentOptions = {
         return vnode // 直接返回注释节点，不做缓存
       }
 
+      // vnode.type：VNode 的 type 属性，对于组件 VNode，type 指向「组件构造函数 / 组件选项对象」
       const comp = vnode.type as ConcreteComponent
 
       // for async components, name check should be based in its loaded
@@ -408,7 +409,8 @@ const KeepAliveImpl: ComponentOptions = {
       // 获取组件名（如组件的name选项）
       const name = getComponentName(
         isAsyncWrapper(vnode)
-          ? (vnode.type as ComponentOptions).__asyncResolved || {}
+          ? // 异步组件的 vnode.type 会被 Vue 包装成一个特殊对象
+            (vnode.type as ComponentOptions).__asyncResolved || {}
           : comp,
       )
 

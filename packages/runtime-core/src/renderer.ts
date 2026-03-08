@@ -2036,6 +2036,17 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   * Vue 渲染器（Renderer）中处理 VNode 节点「移动 / 插入」的核心方法，
+   * 负责将不同类型的 VNode（组件、Fragment、Teleport、普通元素等）挂载到指定 DOM 容器中，
+   * 也是 KeepAlive 组件激活时「复用 DOM」的底层依赖
+   * @param vnode 要移动的目标 VNode
+   * @param container 目标父容器（DOM 元素）
+   * @param anchor 插入位置的锚点节点（DOM 元素，insertBefore 的第二个参数）
+   * @param moveType 移动类型（ENTER/REORDER 等，区分「首次插入」和「重新排序」）
+   * @param parentSuspense 关联的 Suspense 实例（异步组件 / 懒加载场景）
+   * @returns
+   */
   const move: MoveFn = (
     vnode,
     container,
@@ -2044,46 +2055,63 @@ function baseCreateRenderer(
     parentSuspense = null,
   ) => {
     const { el, type, transition, children, shapeFlag } = vnode
+
+    // 组件 VNode 处理（ShapeFlags.COMPONENT）
     if (shapeFlag & ShapeFlags.COMPONENT) {
+      // 递归调用 move 处理组件的 subTree（组件渲染的真实内容 VNode）
       move(vnode.component!.subTree, container, anchor, moveType)
       return
     }
 
+    //  Suspense VNode 处理（ShapeFlags.SUSPENSE）
     if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+      // Suspense 是特殊的内置组件，有自己的 move 方法，直接调用其内部实现
       vnode.suspense!.move(container, anchor, moveType)
       return
     }
 
+    //  Teleport VNode 处理（ShapeFlags.TELEPORT）
     if (shapeFlag & ShapeFlags.TELEPORT) {
+      // Teleport（传送门）组件的 DOM 会被挂载到指定目标容器（如 body），
+      // 因此调用 Teleport 内置的 move 方法，处理跨容器的 DOM 移动
       ;(type as typeof TeleportImpl).move(vnode, container, anchor, internals)
       return
     }
 
+    //  Fragment VNode 处理（type === Fragment）
     if (type === Fragment) {
-      hostInsert(el!, container, anchor)
+      hostInsert(el!, container, anchor) // 插入 Fragment 的占位注释节点
       for (let i = 0; i < (children as VNode[]).length; i++) {
+        // 递归处理子节点
         move((children as VNode[])[i], container, anchor, moveType)
       }
-      hostInsert(vnode.anchor!, container, anchor)
+      hostInsert(vnode.anchor!, container, anchor) // 插入 Fragment 的结束注释节点
       return
     }
 
+    // 静态节点处理（type === Static）
+    // 静态节点移动时无需重新渲染，直接复用原有 DOM
     if (type === Static) {
       moveStaticNode(vnode, container, anchor)
       return
     }
 
+    // 普通元素 VNode 处理（核心 DOM 操作）
     // single nodes
+    // 判断是否需要过渡动画
     const needTransition =
       moveType !== MoveType.REORDER &&
       shapeFlag & ShapeFlags.ELEMENT &&
       transition
+
     if (needTransition) {
+      // 首次插入：执行 beforeEnter → 插入 DOM → 执行 enter
       if (moveType === MoveType.ENTER) {
         transition!.beforeEnter(el!)
         hostInsert(el!, container, anchor)
         queuePostRenderEffect(() => transition!.enter(el!), parentSuspense)
       } else {
+        // 移动/重新插入：先执行 leave 动画 → 动画结束后插入 DOM
         const { leave, delayLeave, afterLeave } = transition!
         const remove = () => {
           if (vnode.ctx!.isUnmounted) {
@@ -2111,6 +2139,7 @@ function baseCreateRenderer(
         }
       }
     } else {
+      // 无过渡动画：直接插入 DOM（核心操作）
       hostInsert(el!, container, anchor)
     }
   }

@@ -470,20 +470,31 @@ function hasPropValueChanged(
   return nextProp !== prevProp
 }
 
+/**
+ * 用于向上同步「高阶组件（HOC）」宿主 DOM 节点引用
+ * @param param0 组件实例，包含 vnode 和 parent 信息
+ * @param el 要更新的 DOM 节点（HostNode）
+ */
 export function updateHOCHostEl(
   { vnode, parent }: ComponentInternalInstance,
   el: typeof vnode.el, // HostNode
 ): void {
+  // 递归遍历父组件链，直到无父组件或跳出条件
   while (parent) {
+    // 获取父组件的根渲染子树（subTree 是组件渲染的真实内容）
     const root = parent.subTree
+
+    // 兼容 Suspense 嵌套场景：同步 Suspense 根节点的 el
     if (root.suspense && root.suspense.activeBranch === vnode) {
       root.el = vnode.el
     }
+
+    // 判断当前父组件的根子树是否等于当前组件的 VNode（是否是直接包裹的 HOC）
     if (root === vnode) {
-      ;(vnode = parent.vnode).el = el
-      parent = parent.parent
+      ;(vnode = parent.vnode).el = el // 更新父组件的 VNode el 为真实 DOM 节点
+      parent = parent.parent // 继续向上遍历父组件链（处理多层 HOC 嵌套）
     } else {
-      break
+      break // 非直接包裹的 HOC，终止遍历（避免无限循环）
     }
   }
 }
