@@ -143,8 +143,18 @@ export const toHandlerKey: <T extends string>(
 export const hasChanged = (value: any, oldValue: any): boolean =>
   !Object.is(value, oldValue)
 
+/**
+ *
+ * @param fns 函数数组
+ * @param arg 传递给每个函数的参数
+ */
 export const invokeArrayFns = (fns: Function[], ...arg: any[]): void => {
+  // 遍历执行函数数组
   for (let i = 0; i < fns.length; i++) {
+    /**
+     * invokeArrayFns 确实是「直接遍历执行函数数组」，但这只是执行层的极简逻辑
+     * Vue 真正的「错误容错」并不是在这个函数里处理，而是在「钩子注册 / 包装阶段」就提前做了铺垫
+     */
     fns[i](...arg)
   }
 }

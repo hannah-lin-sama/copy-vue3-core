@@ -25,17 +25,17 @@ export enum SchedulerJobFlags {
 }
 
 export interface SchedulerJob extends Function {
-  id?: number
+  id?: number // 任务 ID（用于去重和调试）
   /**
    * flags can technically be undefined, but it can still be used in bitwise
    * operations just like 0.
    */
-  flags?: SchedulerJobFlags
+  flags?: SchedulerJobFlags // 任务标志（用于调度控制）
   /**
    * Attached by renderer.ts when setting up a component's render effect
    * Used to obtain component information when reporting max recursive updates.
    */
-  i?: ComponentInternalInstance
+  i?: ComponentInternalInstance // 组件实例（用于错误处理）
 }
 
 export type SchedulerJobs = SchedulerJob | SchedulerJob[]

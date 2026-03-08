@@ -284,16 +284,29 @@ export enum MoveType {
   REORDER,
 }
 
+/**
+ * Vue 的「副作用调度」分为多个阶段：
+ * queuePreFlushCb：刷新前执行（如 watch 的 flush: 'pre'）；
+ * queuePostFlushCb：刷新后执行（如 watch 的 flush: 'post'）；
+ * queueEffectWithSuspense：适配 Suspense 的特殊调度（等待 Suspense 解析完成后执行）；
+ */
+
+/**
+ * 根据「Suspense 特性是否开启」和「环境（测试 / 生产）」动态赋值的「渲染后副作用队列函数」
+ * fn：要执行的副作用函数
+ * suspense：关联的 Suspense 边界（如果有）
+ */
 export const queuePostRenderEffect: (
   fn: SchedulerJobs,
   suspense: SuspenseBoundary | null,
-) => void = __FEATURE_SUSPENSE__
-  ? __TEST__
+) => void = __FEATURE_SUSPENSE__ // 分支1：开启了Suspense特性
+  ? __TEST__ // 测试环境（vitest）
     ? // vitest can't seem to handle eager circular dependency
+      // vitest 无法处理「急切循环依赖」，包裹一层函数规避
       (fn: Function | Function[], suspense: SuspenseBoundary | null) =>
         queueEffectWithSuspense(fn, suspense)
-    : queueEffectWithSuspense
-  : queuePostFlushCb
+    : queueEffectWithSuspense // 非测试环境 → 直接使用 queueEffectWithSuspense
+  : queuePostFlushCb // 未开启Suspense特性 → 降级为普通的渲染后回调队列
 
 /**
  * The createRenderer function accepts two generic arguments:

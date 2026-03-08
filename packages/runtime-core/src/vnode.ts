@@ -900,12 +900,20 @@ export function mergeProps(...args: (Data & VNodeProps)[]): Data {
   return ret
 }
 
+/**
+ * 执行 VNode 钩子（如 onVnodeMounted、onVnodeUpdated 等）的统一入口
+ * @param hook 要执行的 VNode 钩子函数
+ * @param instance  钩子所属的组件实例（可为 null）
+ * @param vnode  当前 VNode（钩子触发时的目标 VNode）
+ * @param prevVNode 上一个 VNode（更新类钩子需要，默认 null）
+ */
 export function invokeVNodeHook(
   hook: VNodeHook,
   instance: ComponentInternalInstance | null,
   vnode: VNode,
   prevVNode: VNode | null = null,
 ): void {
+  // 执行hook钩子函数，参数为vnode和prevVNode
   callWithAsyncErrorHandling(hook, instance, ErrorCodes.VNODE_HOOK, [
     vnode,
     prevVNode,

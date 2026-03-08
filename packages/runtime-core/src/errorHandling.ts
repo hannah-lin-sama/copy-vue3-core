@@ -67,6 +67,14 @@ export const ErrorTypeStrings: Record<ErrorTypes, string> = {
 
 export type ErrorTypes = LifecycleHooks | ErrorCodes | WatchErrorCodes
 
+/**
+ *
+ * @param fn 要执行的函数
+ * @param instance  函数所属的组件实例（可为 null）
+ * @param type 错误类型（用于错误处理）
+ * @param args
+ * @returns 函数执行结果（如果有）
+ */
 export function callWithErrorHandling(
   fn: Function,
   instance: ComponentInternalInstance | null | undefined,
@@ -80,12 +88,21 @@ export function callWithErrorHandling(
   }
 }
 
+/**
+ * 处理异步函数执行过程中出现的错误，确保错误能够被捕获并处理
+ * @param fn 要执行的异步函数
+ * @param instance  函数所属的组件实例（可为 null）
+ * @param type 错误类型（用于错误处理）
+ * @param args
+ * @returns 函数执行结果（如果有）
+ */
 export function callWithAsyncErrorHandling(
   fn: Function | Function[],
   instance: ComponentInternalInstance | null,
   type: ErrorTypes,
   args?: unknown[],
 ): any {
+  // 处理单个函数的情况
   if (isFunction(fn)) {
     const res = callWithErrorHandling(fn, instance, type, args)
     if (res && isPromise(res)) {
@@ -96,6 +113,7 @@ export function callWithAsyncErrorHandling(
     return res
   }
 
+  // 处理数组函数的情况
   if (isArray(fn)) {
     const values = []
     for (let i = 0; i < fn.length; i++) {

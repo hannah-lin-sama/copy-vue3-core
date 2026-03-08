@@ -396,7 +396,7 @@ enum AccessTypes {
 
 export interface ComponentRenderContext {
   [key: string]: any
-  _: ComponentInternalInstance
+  _: ComponentInternalInstance // 组件内部实例
 }
 
 export const isReservedPrefix = (key: string): key is '_' | '$' =>

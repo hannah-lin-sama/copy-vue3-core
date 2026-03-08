@@ -279,13 +279,14 @@ export type LifecycleHook<TFn = Function> = (TFn & SchedulerJob)[] | null
 
 // use `E extends any` to force evaluating type to fix #2362
 export type SetupContext<
-  E = EmitsOptions,
-  S extends SlotsType = {},
+  E = EmitsOptions, // 自定义事件类型（默认：EmitsOptions）
+  S extends SlotsType = {}, // 插槽类型（默认：空对象，约束为 SlotsType 子类型）
 > = E extends any
   ? {
-      attrs: Data
-      slots: UnwrapSlotsType<S>
-      emit: EmitFn<E>
+      attrs: Data // 非 props 的组件属性（如 class、style、自定义属性）
+      slots: UnwrapSlotsType<S> // 解包后的插槽类型（适配 SlotsType）
+      emit: EmitFn<E> // 类型化的 emit 方法（基于 E 推导事件类型）
+      // 暴露属性给父组件的方法
       expose: <Exposed extends Record<string, any> = Record<string, any>>(
         exposed?: Exposed,
       ) => void
@@ -313,46 +314,56 @@ export type InternalRenderFunction = {
 }
 
 /**
+ * 组件内部实例
+ * 每个 Vue 组件在运行时都会对应一个 ComponentInternalInstance 实例，Vue 内部通过这个实例掌控组件的一切行为。
  * We expose a subset of properties on the internal instance as they are
  * useful for advanced external libraries and tools.
  */
 export interface ComponentInternalInstance {
-  uid: number
-  type: ConcreteComponent
-  parent: ComponentInternalInstance | null
-  root: ComponentInternalInstance
-  appContext: AppContext
+  uid: number // 组件唯一ID（全局递增，用于区分不同组件实例）
+  type: ConcreteComponent // 组件类型（如用户定义的 { setup(), template: ... }）
+  parent: ComponentInternalInstance | null // 父组件实例（根组件为 null）
+  root: ComponentInternalInstance // 根组件实例（所有组件都指向根，方便快速访问）
+  appContext: AppContext // 组件所属的应用上下文（包含 app.config、全局组件/指令等）
   /**
+   * 组件在父 VNode 树中的节点（父组件眼中的当前组件）
    * Vnode representing this component in its parent's vdom tree
    */
   vnode: VNode
   /**
+   * 父组件更新时的「待生效新 VNode」（更新阶段临时存储）
    * The pending new vnode from parent updates
    * @internal
    */
   next: VNode | null
   /**
+   *  组件自身渲染出的「根 VNode 子树」（即组件内部的 DOM/子组件）
    * Root vnode of this component's own vdom tree
    */
   subTree: VNode
   /**
+   * 组件的渲染副作用（响应式数据变化时触发重新渲染）
    * Render effect instance
    */
   effect: ReactiveEffect
   /**
+   * 强制更新函数（对应 $forceUpdate，手动触发渲染）
    * Force update render effect
    */
   update: () => void
   /**
+   * 渲染任务（交给调度器的函数，包含「脏检查」逻辑）
    * Render effect job to be passed to scheduler (checks if dirty)
    */
   job: SchedulerJob
   /**
+   * 组件的渲染函数（编译 template 生成）
    * The render function that returns vdom tree.
    * @internal
    */
   render: InternalRenderFunction | null
   /**
+   * SSR 专用渲染函数
    * SSR render function
    * @internal
    */
@@ -376,11 +387,13 @@ export interface ComponentInternalInstance {
    */
   scope: EffectScope
   /**
+   *  代理访问类型缓存（避免频繁 hasOwnProperty 检查）
    * cache for proxy access type to avoid hasOwnProperty calls
    * @internal
    */
   accessCache: Data | null
   /**
+   * 渲染函数缓存（如内联事件处理器）
    * cache for render function values that rely on _ctx but won't need updates
    * after initialized (e.g. inline handlers)
    * @internal
@@ -388,16 +401,19 @@ export interface ComponentInternalInstance {
   renderCache: (Function | VNode | undefined)[]
 
   /**
+   * 解析后的组件注册表（mixins/extends 场景）
    * Resolved component registry, only for components with mixins or extends
    * @internal
    */
   components: Record<string, ConcreteComponent> | null
   /**
+   * 解析后的指令注册表（mixins/extends 场景）
    * Resolved directive registry, only for components with mixins or extends
    * @internal
    */
   directives: Record<string, Directive> | null
   /**
+   * 过滤器（仅兼容 Vue2）
    * Resolved filters registry, v2 compat only
    * @internal
    */
@@ -418,16 +434,19 @@ export interface ComponentInternalInstance {
    */
   inheritAttrs?: boolean
   /**
+   * 自定义元素实例
    * Custom Element instance (if component is created by defineCustomElement)
    * @internal
    */
   ce?: ComponentCustomElementInterface
   /**
+   * 是否是自定义元素
    * is custom element? (kept only for compatibility)
    * @internal
    */
   isCE?: boolean
   /**
+   * 自定义元素 HMR 方法
    * custom element specific HMR method
    * @internal
    */
@@ -436,19 +455,22 @@ export interface ComponentInternalInstance {
   // the rest are only for stateful components ---------------------------------
 
   // main proxy that serves as the public instance (`this`)
+  // 组件公共实例（用户代码中的 `this`）
   proxy: ComponentPublicInstance | null
 
   // exposed properties via expose()
-  exposed: Record<string, any> | null
-  exposeProxy: Record<string, any> | null
+  exposed: Record<string, any> | null // 通过 expose() 暴露的属性
+  exposeProxy: Record<string, any> | null // 暴露属性的代理（限制用户访问范围）
 
   /**
+   * 运行时编译 render 函数的专用 proxy
    * alternative proxy used only for runtime-compiled render functions using
    * `with` block
    * @internal
    */
   withProxy: ComponentPublicInstance | null
   /**
+   * 公共实例的目标对象（存储 computed、methods、自定义属性）
    * This is the target for the public instance proxy. It also holds properties
    * injected by user options (computed, methods etc.) and user-attached
    * custom properties (via `this.x = ...`)
@@ -457,25 +479,28 @@ export interface ComponentInternalInstance {
   ctx: Data
 
   // state
-  data: Data
-  props: Data
-  attrs: Data
-  slots: InternalSlots
-  refs: Data
-  emit: EmitFn
+  data: Data // 组件的 data 数据（响应式）
+  props: Data // 解析后的 props 数据（响应式）
+  attrs: Data // 组件的 attrs（非 props 的属性，如 class、style）
+  slots: InternalSlots // 组件的插槽（编译后的内部格式）
+  refs: Data // 组件的 refs 集合（$refs）
+  emit: EmitFn // 组件的 emit 方法（触发自定义事件）
 
   /**
+   * 跟踪 .once 事件是否已触发
    * used for keeping track of .once event handlers on components
    * @internal
    */
   emitted: Record<string, boolean> | null
   /**
+   * props 默认值缓存（避免默认工厂函数重复执行触发 watcher）
    * used for caching the value returned from props default factory functions to
    * avoid unnecessary watcher trigger
    * @internal
    */
   propsDefaults: Data
   /**
+   * setup 函数返回的状态（响应式）
    * setup related
    * @internal
    */
@@ -486,33 +511,38 @@ export interface ComponentInternalInstance {
    */
   devtoolsRawSetupState?: any
   /**
+   * setup 函数的上下文（emit、slots、attrs 等）
    * @internal
    */
   setupContext: SetupContext | null
 
   /**
+   * 所属的 Suspense 边界实例
    * suspense related
    * @internal
    */
   suspense: SuspenseBoundary | null
   /**
+   * Suspense 挂起批次 ID
    * suspense pending batch id
    * @internal
    */
   suspenseId: number
   /**
+   * 异步依赖（如异步组件的 Promise）
    * @internal
    */
   asyncDep: Promise<any> | null
   /**
+   * 异步依赖是否已解析
    * @internal
    */
   asyncResolved: boolean
 
   // lifecycle
-  isMounted: boolean
-  isUnmounted: boolean
-  isDeactivated: boolean
+  isMounted: boolean // 是否已挂载
+  isUnmounted: boolean // 是否已卸载
+  isDeactivated: boolean // 是否被 KeepAlive 失活（隐藏）
   /**
    * @internal
    */
@@ -571,16 +601,19 @@ export interface ComponentInternalInstance {
   [LifecycleHooks.SERVER_PREFETCH]: LifecycleHook<() => Promise<unknown>>
 
   /**
+   *  缓存 $forceUpdate 方法（避免每次访问都绑定 this）
    * For caching bound $forceUpdate on public proxy access
    * @internal
    */
   f?: () => void
   /**
+   * 缓存 $nextTick 方法
    * For caching bound $nextTick on public proxy access
    * @internal
    */
   n?: () => Promise<void>
   /**
+   * 更新 Teleport 组件的 CSS 变量
    * `updateTeleportCssVars`
    * For updating css vars on contained teleports
    * @internal
@@ -588,12 +621,14 @@ export interface ComponentInternalInstance {
   ut?: (vars?: Record<string, unknown>) => void
 
   /**
+   * 开发环境：样式 v-bind 水合校验
    * dev only. For style v-bind hydration mismatch checks
    * @internal
    */
   getCssVars?: () => Record<string, unknown>
 
   /**
+   * 合并后的 Vue2 风格选项
    * v2 compat only, for caching mutated $options
    * @internal
    */
@@ -710,7 +745,13 @@ export function createComponentInstance(
 
 export let currentInstance: ComponentInternalInstance | null = null
 
+/**
+ * 获取当前活跃组件内部实例
+ * @returns
+ */
 export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
+  // currentInstance 组件常规执行阶段的当前实例：如 setup() 同步执行、生命周期钩子、方法调用时的活跃实例
+  // currentRenderingInstance 组件渲染阶段的当前实例：仅在组件 render 函数 / 模板编译后的渲染函数执行期间生效；
   currentInstance || currentRenderingInstance
 
 let internalSetCurrentInstance: (

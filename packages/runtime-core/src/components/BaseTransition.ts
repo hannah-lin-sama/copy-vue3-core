@@ -526,15 +526,28 @@ function getInnerChild(vnode: VNode): VNode | undefined {
   }
 }
 
+/**
+ * 将过渡钩子（TransitionHooks）递归绑定到目标 VNode 及其子树中，确保组件、Suspense 等特殊节点能正确触发过渡动画
+ * @param vnode 目标 VNode（可能是组件、Suspense、普通元素节点）
+ * @param hooks 过渡动画钩子（TransitionHooks）：包含 beforeEnter/enter/leave 等动画回调
+ */
 export function setTransitionHooks(vnode: VNode, hooks: TransitionHooks): void {
+  // 情况1：目标VNode是组件节点（且有组件实例）
   if (vnode.shapeFlag & ShapeFlags.COMPONENT && vnode.component) {
-    vnode.transition = hooks
+    vnode.transition = hooks // 给组件VNode本身绑定过渡钩子
+    // 递归：将钩子绑定到组件内部的真实子树（穿透组件到内部DOM）
     setTransitionHooks(vnode.component.subTree, hooks)
+
+    // 情况2：目标VNode是Suspense节点（且开启Suspense特性）
   } else if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
+    // 给Suspense的「内容分支」绑定克隆后的钩子（避免共享状态）
     vnode.ssContent!.transition = hooks.clone(vnode.ssContent!)
+    // 给Suspense的「兜底分支」绑定克隆后的钩子
     vnode.ssFallback!.transition = hooks.clone(vnode.ssFallback!)
+
+    // 情况3：普通节点（如div/span等）
   } else {
-    vnode.transition = hooks
+    vnode.transition = hooks // 直接绑定过渡钩子
   }
 }
 
