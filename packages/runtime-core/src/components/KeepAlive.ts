@@ -52,9 +52,9 @@ import { LifecycleHooks } from '../enums'
 type MatchPattern = string | RegExp | (string | RegExp)[]
 
 export interface KeepAliveProps {
-  include?: MatchPattern
-  exclude?: MatchPattern
-  max?: number | string
+  include?: MatchPattern // 包含的组件，只有匹配的组件才会被缓存 字符串或正则表达式或数组
+  exclude?: MatchPattern // 排除的组件，匹配的组件不会被缓存
+  max?: number | string // 最大缓存数量
 }
 
 type CacheKey = PropertyKey | ConcreteComponent
@@ -485,13 +485,15 @@ const decorate = (t: typeof KeepAliveImpl) => {
 // export the public type for h/tsx inference
 // also to avoid inline import() in generated d.ts files
 export const KeepAlive = (__COMPAT__
-  ? /*@__PURE__*/ decorate(KeepAliveImpl)
-  : KeepAliveImpl) as any as {
+  ? // Vue2 兼容模式
+    /*@__PURE__*/ decorate(KeepAliveImpl)
+  : // 原生 Vue3 模式
+    KeepAliveImpl) as any as {
   __isKeepAlive: true
   new (): {
     $props: VNodeProps & KeepAliveProps
     $slots: {
-      default(): VNode[]
+      default(): VNode[] // 仅支持 default 默认插槽
     }
   }
 }

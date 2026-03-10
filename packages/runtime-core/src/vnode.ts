@@ -124,10 +124,10 @@ export type VNodeHook =
 
 // https://github.com/microsoft/TypeScript/issues/33099
 export type VNodeProps = {
-  key?: PropertyKey
-  ref?: VNodeRef
-  ref_for?: boolean
-  ref_key?: string
+  key?: PropertyKey // VNode 的唯一标识，用于 Vue 的「key 算法」优化 diff 过程
+  ref?: VNodeRef // 获取真实 DOM 元素或组件实例
+  ref_for?: boolean // 标记 ref 是否用于列表渲染，使 ref 收集为数组
+  ref_key?: string // 自定义 ref 收集的键名，配合 ref_for 使用
 
   // vnode hooks
   onVnodeBeforeMount?: VNodeMountHook | VNodeMountHook[]
