@@ -30,10 +30,13 @@ import type { ObjectEmitsOptions } from './componentEmits'
 import { ErrorCodes, callWithAsyncErrorHandling } from './errorHandling'
 import type { DefineComponent } from './apiDefineComponent'
 
+// App 是 Vue3 中应用实例（createApp 返回的实例）的核心类型接口
 export interface App<HostElement = any> {
+  // 基础信息
   version: string
   config: AppConfig
 
+  // 插件 / 扩展
   use<Options extends unknown[]>(
     plugin: Plugin<Options>,
     ...options: NoInfer<Options>
@@ -41,6 +44,8 @@ export interface App<HostElement = any> {
   use<Options>(plugin: Plugin<Options>, options: NoInfer<Options>): this
 
   mixin(mixin: ComponentOptions): this
+
+  // 全局注册
   component(name: string): Component | undefined
   component<T extends Component | DefineComponent>(
     name: string,
@@ -63,6 +68,8 @@ export interface App<HostElement = any> {
     name: string,
     directive: Directive<HostElement, Value, Modifiers, Arg>,
   ): this
+
+  // 生命周期
   mount(
     rootContainer: HostElement | string,
     /**
@@ -80,6 +87,8 @@ export interface App<HostElement = any> {
   ): ComponentPublicInstance
   unmount(): void
   onUnmount(cb: () => void): void
+
+  // 依赖注入
   provide<T, K = InjectionKey<T> | string | number>(
     key: K,
     value: K extends InjectionKey<infer V> ? V : T,
@@ -94,6 +103,7 @@ export interface App<HostElement = any> {
   runWithContext<T>(fn: () => T): T
 
   // internal, but we need to expose these for the server-renderer and devtools
+  // 内部私有属性
   _uid: number
   _component: ConcreteComponent
   _props: Data | null
@@ -108,12 +118,14 @@ export interface App<HostElement = any> {
 
   /**
    * v2 compat only
+   * Vue2 兼容：全局过滤器（Vue3 已移除，仅兼容层保留）
    */
   filter?(name: string): Function | undefined
   filter?(name: string, filter: Function): this
 
   /**
    * @internal v3 compat only
+   * Vue3 兼容：创建根组件（内部使用）
    */
   _createRoot?(options: ComponentOptions): ComponentPublicInstance
 }
@@ -170,36 +182,42 @@ export interface AppConfig {
 
 export interface AppContext {
   app: App // for devtools
-  config: AppConfig
-  mixins: ComponentOptions[]
-  components: Record<string, Component>
-  directives: Record<string, Directive>
-  provides: Record<string | symbol, any>
+  config: AppConfig // 应用级全局配置
+  mixins: ComponentOptions[] // 存储应用级全局混入
+  components: Record<string, Component> // 存储应用级全局注册的组件
+  directives: Record<string, Directive> // 存储应用级全局注册的指令
+  provides: Record<string | symbol, any> // 存储应用级注入值
 
   /**
    * Cache for merged/normalized component options
    * Each app instance has its own cache because app-level global mixins and
    * optionMergeStrategies can affect merge behavior.
+   *
+   * 缓存「合并后的组件选项」，避免每次创建组件实例时重复合并全局混入、组件自身选项
    * @internal
    */
   optionsCache: WeakMap<ComponentOptions, MergedComponentOptions>
   /**
    * Cache for normalized props options
+   * 缓存「规范化后的 props 选项」（如将数组形式的 props 转为对象形式）
    * @internal
    */
   propsCache: WeakMap<ConcreteComponent, NormalizedPropsOptions>
   /**
    * Cache for normalized emits options
+   * 缓存「规范化后的 emits 选项」
    * @internal
    */
   emitsCache: WeakMap<ConcreteComponent, ObjectEmitsOptions | null>
   /**
    * HMR only
+   * 仅用于热更新（HMR），存储应用重新加载的回调函数
    * @internal
    */
   reload?: () => void
   /**
    * v2 compat only
+   * Vue2 兼容层，存储应用级全局过滤器
    * @internal
    */
   filters?: Record<string, Function>
