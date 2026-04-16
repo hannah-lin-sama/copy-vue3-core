@@ -74,10 +74,13 @@ export interface SFCScriptCompileOptions {
   /**
    * Scope ID for prefixing injected CSS variables.
    * This must be consistent with the `id` passed to `compileStyle`.
+   * 用于为注入的 CSS 变量添加前缀的作用域 ID，必须与传递给 compileStyle 的 id 一致
    */
   id: string
   /**
    * Production mode. Used to determine whether to generate hashed CSS variables
+   * 生产模式标志，用于确定是否生成哈希的 CSS 变量
+   * 在生产环境中，Vue 会使用哈希值来确保 CSS 变量的唯一性。
    */
   isProd?: boolean
   /**
@@ -86,11 +89,13 @@ export interface SFCScriptCompileOptions {
   sourceMap?: boolean
   /**
    * https://babeljs.io/docs/en/babel-parser#plugins
+   *  配置 Babel 解析器插件
    */
   babelParserPlugins?: ParserPlugin[]
   /**
    * A list of files to parse for global types to be made available for type
    * resolving in SFC macros. The list must be fully resolved file system paths.
+   * 用于解析 SFC 宏中类型的全局类型文件列表，必须是完全解析的文件系统路径。
    */
   globalTypeFiles?: string[]
   /**
@@ -99,29 +104,37 @@ export interface SFCScriptCompileOptions {
    * - Only affects `<script setup>`
    * - This should only be used in production because it prevents the template
    * from being hot-reloaded separately from component state.
+   * 编译模板并将生成的渲染函数直接内联到 setup() 中。这仅影响 <script setup>，并且建议仅在生产环境中使用，因为它会阻止模板与组件状态分开热重载。
    */
   inlineTemplate?: boolean
   /**
    * Generate the final component as a variable instead of default export.
    * This is useful in e.g. @vitejs/plugin-vue where the script needs to be
    * placed inside the main module.
+   * 将最终组件生成为变量而不是默认导出。
+   * 这在例如 @vitejs/plugin-vue 中很有用，因为脚本需要放置在主模块内部。
    */
   genDefaultAs?: string
   /**
    * Options for template compilation when inlining. Note these are options that
    * would normally be passed to `compiler-sfc`'s own `compileTemplate()`, not
    * options passed to `compiler-dom`.
+   *  内联时模板编译的选项
    */
   templateOptions?: Partial<SFCTemplateCompileOptions>
   /**
    * Hoist <script setup> static constants.
    * - Only enables when one `<script setup>` exists.
+   * 提升 <script setup> 中的静态常量
    * @default true
    */
   hoistStatic?: boolean
   /**
    * Set to `false` to disable reactive destructure for `defineProps` (pre-3.5
    * behavior), or set to `'error'` to throw hard error on props destructures.
+   * 控制 defineProps 的反应式解构行为
+   * - `false` 禁用反应式解构，与 3.5 之前的版本行为相同
+   * - `'error'` 抛出错误，当 props 解构失败时
    * @default true
    */
   propsDestructure?: boolean | 'error'
@@ -129,6 +142,7 @@ export interface SFCScriptCompileOptions {
    * File system access methods to be used when resolving types
    * imported in SFC macros. Defaults to ts.sys in Node.js, can be overwritten
    * to use a virtual file system for use in browsers (e.g. in REPLs)
+   *  用于解析 SFC 宏中导入的类型时使用的文件系统访问方法
    */
   fs?: {
     fileExists(file: string): boolean
@@ -141,13 +155,14 @@ export interface SFCScriptCompileOptions {
   customElement?: boolean | ((filename: string) => boolean)
 }
 
+// 导入绑定的详细信息
 export interface ImportBinding {
-  isType: boolean
-  imported: string
-  local: string
-  source: string
-  isFromSetup: boolean
-  isUsedInTemplate: boolean
+  isType: boolean // 是否类型导入
+  imported: string // 导入的原始名称
+  local: string // 本地使用的名称
+  source: string // 导入的文件路径
+  isFromSetup: boolean // 是否从 <script setup> 导入
+  isUsedInTemplate: boolean // 是否在模板中使用
 }
 
 const MACROS = [
@@ -164,6 +179,7 @@ const MACROS = [
  * Compile `<script setup>`
  * It requires the whole SFC descriptor because we need to handle and merge
  * normal `<script>` + `<script setup>` if both are present.
+ *  Vue 3 编译器 SFC 模块，用于编译组件中的 <script> 和 <script setup> 标签
  */
 export function compileScript(
   sfc: SFCDescriptor,
@@ -179,12 +195,17 @@ export function compileScript(
 
   const { script, scriptSetup, source, filename } = sfc
   const hoistStatic = options.hoistStatic !== false && !script
+
+  // 从 id 中提取 scopeId，用于生成 CSS 变量
   const scopeId = options.id ? options.id.replace(/^data-v-/, '') : ''
   const scriptLang = script && script.lang
   const scriptSetupLang = scriptSetup && scriptSetup.lang
+
+  // js、jsx、ts、tsx
   const isJSOrTS =
     isJS(scriptLang, scriptSetupLang) || isTS(scriptLang, scriptSetupLang)
 
+  // <script> 和 <script setup> 标签的 lang 属性要相同
   if (script && scriptSetup && scriptLang !== scriptSetupLang) {
     throw new Error(
       `[@vue/compiler-sfc] <script> and <script setup> must have the same ` +
@@ -193,40 +214,53 @@ export function compileScript(
   }
 
   if (!scriptSetup) {
+    // 没有 <script> 也没有 <script setup>，compileScript 会抛出错误
     if (!script) {
       throw new Error(`[@vue/compiler-sfc] SFC contains no <script> tags.`)
     }
 
     // normal <script> only
+    // 脚本语言不是 JS 或 TS，则直接返回原始脚本块，不做处理
     if (script.lang && !isJSOrTS) {
       // do not process non js/ts script blocks
       return script
     }
 
+    // 创建编译上下文并处理普通 <script> 标签
     const ctx = new ScriptCompileContext(sfc, options)
     return processNormalScript(ctx, scopeId)
   }
 
+  // <script setup> only
+  // 当 <script setup> 有语言属性且不是 JS/TS 时，直接返回原始脚本块，不做处理
   if (scriptSetupLang && !isJSOrTS) {
     // do not process non js/ts script blocks
     return scriptSetup
   }
 
+  // 脚本编译上下文
   const ctx = new ScriptCompileContext(sfc, options)
 
   // metadata that needs to be returned
   // const ctx.bindingMetadata: BindingMetadata = {}
+  // 记录普通 <script> 中的变量绑定类型
   const scriptBindings: Record<string, BindingTypes> = Object.create(null)
+  // 记录 <script setup> 中的变量绑定类型
   const setupBindings: Record<string, BindingTypes> = Object.create(null)
 
+  // 存储 <script> 中的默认导出节点
   let defaultExport: Node | undefined
-  let hasAwait = false
-  let hasInlinedSsrRenderFn = false
+  let hasAwait = false // 标记脚本中是否使用了 await 关键字
+  let hasInlinedSsrRenderFn = false // 标记是否内联了 SSR 渲染函数
 
   // string offsets
+  // <script setup> 块的起始偏移量
   const startOffset = ctx.startOffset!
+  // <script setup> 块的结束偏移量
   const endOffset = ctx.endOffset!
+  // 普通 <script> 块的起始偏移量（如果存在）
   const scriptStartOffset = script && script.loc.start.offset
+  // 普通 <script> 块的结束偏移量（如果存在）
   const scriptEndOffset = script && script.loc.end.offset
 
   function hoistNode(node: Statement) {
@@ -248,6 +282,15 @@ export function compileScript(
     ctx.s.move(start, end, 0)
   }
 
+  /**
+   * 注册用户导入
+   * @param source 导入源
+   * @param local 本地名称
+   * @param imported 导入名称
+   * @param isType 是否为类型导入
+   * @param isFromSetup 是否从 <script setup> 导入
+   * @param needTemplateUsageCheck 是否需要检查模板使用
+   */
   function registerUserImport(
     source: string,
     local: string,
@@ -279,10 +322,20 @@ export function compileScript(
     }
   }
 
+  /**
+   * 检查宏函数参数中是否引用了 setup 作用域的变量
+   * @param node AST 节点，代表宏函数的参数
+   * @param method 字符串，代表宏函数的名称
+   * @returns
+   */
   function checkInvalidScopeReference(node: Node | undefined, method: string) {
     if (!node) return
+
+    // 遍历宏函数参数中的所有标识符
     walkIdentifiers(node, id => {
       const binding = setupBindings[id.name]
+      // 检查是否引用了 setup 作用域的变量
+      // 且该变量不是字面量常量
       if (binding && binding !== BindingTypes.LITERAL_CONST) {
         ctx.error(
           `\`${method}()\` in <script setup> cannot reference locally ` +
@@ -296,24 +349,34 @@ export function compileScript(
     })
   }
 
+  // 脚本 AST 节点
   const scriptAst = ctx.scriptAst
+  // 脚本 setup AST 节点
   const scriptSetupAst = ctx.scriptSetupAst!
 
   // 1.1 walk import declarations of <script>
   if (scriptAst) {
     for (const node of scriptAst.body) {
+      // 导入声明节点
       if (node.type === 'ImportDeclaration') {
         // record imports for dedupe
         for (const specifier of node.specifiers) {
+          // 提取导入名称
           const imported = getImportedName(specifier)
           registerUserImport(
+            // 导入源：node.source.value，如 'vue'、'./components/Button' 等
             node.source.value,
+            // 本地名称：specifier.local.name，导入后在本地使用的名称
             specifier.local.name,
             imported,
+            // 是否类型导入
             node.importKind === 'type' ||
               (specifier.type === 'ImportSpecifier' &&
                 specifier.importKind === 'type'),
+            // 是否默认导入
+            // 否，这里是命名导入
             false,
+            // 是否需要生成渲染函数
             !options.inlineTemplate,
           )
         }
@@ -322,9 +385,12 @@ export function compileScript(
   }
 
   // 1.2 walk import declarations of <script setup>
+  // 处理 <script setup> 标签中的导入声明
   for (const node of scriptSetupAst.body) {
     if (node.type === 'ImportDeclaration') {
       // import declarations are moved to top
+      // 将导入声明节点提升到模块顶部的函数
+      // 确保所有导入声明都在模块的最前面，符合 ES 模块的规范
       hoistNode(node)
 
       // dedupe imports
@@ -349,31 +415,39 @@ export function compileScript(
         const local = specifier.local.name
         const imported = getImportedName(specifier)
         const source = node.source.value
+        // 检查是否已存在相同本地名称的导入
         const existing = ctx.userImports[local]
+
         if (source === 'vue' && MACROS.includes(imported)) {
+          // 如果导入的是宏且本地名称与宏名称相同，发出警告
           if (local === imported) {
             warnOnce(
               `\`${imported}\` is a compiler macro and no longer needs to be imported.`,
             )
           } else {
+            // 如果导入的是宏但本地名称与宏名称不同，报错
             ctx.error(
               `\`${imported}\` is a compiler macro and cannot be aliased to ` +
                 `a different name.`,
               specifier,
             )
           }
+          // 移除宏的导入声明，因为它们不需要手动导入
           removeSpecifier(i)
         } else if (existing) {
+          // 如果导入源和导入名称都相同，移除重复的导入
           if (existing.source === source && existing.imported === imported) {
             // already imported in <script setup>, dedupe
             removeSpecifier(i)
           } else {
+            // 如果本地名称相同但导入源或导入名称不同，报错
             ctx.error(
               `different imports aliased to same local name.`,
               specifier,
             )
           }
         } else {
+          // 注册用户导入
           registerUserImport(
             source,
             local,
@@ -381,11 +455,12 @@ export function compileScript(
             node.importKind === 'type' ||
               (specifier.type === 'ImportSpecifier' &&
                 specifier.importKind === 'type'),
-            true,
+            true, // 默认导入
             !options.inlineTemplate,
           )
         }
       }
+      // 如果所有导入声明都被移除，移除导入声明节点
       if (node.specifiers.length && removed === node.specifiers.length) {
         ctx.s.remove(node.start! + startOffset, node.end! + startOffset)
       }
@@ -396,12 +471,14 @@ export function compileScript(
   const vueImportAliases: Record<string, string> = {}
   for (const key in ctx.userImports) {
     const { source, imported, local } = ctx.userImports[key]
+    // 如果导入源是 'vue'，则将导入名称映射到本地名称
     if (source === 'vue') vueImportAliases[imported] = local
   }
 
   // 2.1 process normal <script> body
   if (script && scriptAst) {
     for (const node of scriptAst.body) {
+      // 默认导出声明
       if (node.type === 'ExportDefaultDeclaration') {
         // export default
         defaultExport = node
@@ -412,8 +489,12 @@ export function compileScript(
         // if has render and no template, generate return object instead of
         // empty render function (#4980)
         let optionProperties
+
+        // 处理直接对象字面量 export default { ... }
         if (defaultExport.declaration.type === 'ObjectExpression') {
           optionProperties = defaultExport.declaration.properties
+
+          // 处理函数调用：export default createApp({ ... })
         } else if (
           defaultExport.declaration.type === 'CallExpression' &&
           defaultExport.declaration.arguments[0] &&
@@ -421,6 +502,8 @@ export function compileScript(
         ) {
           optionProperties = defaultExport.declaration.arguments[0].properties
         }
+
+        // name 和 render 选项检查
         if (optionProperties) {
           for (const p of optionProperties) {
             if (
@@ -441,24 +524,32 @@ export function compileScript(
           }
         }
 
+        // 语法转换
         // export default { ... } --> const __default__ = { ... }
         const start = node.start! + scriptStartOffset!
         const end = node.declaration.start! + scriptStartOffset!
+
         ctx.s.overwrite(start, end, `const ${normalScriptDefaultVar} = `)
+
+        // 命名导出
       } else if (node.type === 'ExportNamedDeclaration') {
+        // 找 exported.name === 'default' 的说明符
         const defaultSpecifier = node.specifiers.find(
           s =>
             s.exported.type === 'Identifier' && s.exported.name === 'default',
         ) as ExportSpecifier
+
         if (defaultSpecifier) {
           defaultExport = node
           // 1. remove specifier
           if (node.specifiers.length > 1) {
+            // 如果有多个说明符，只移除 default 说明符，保留其他说明符
             ctx.s.remove(
               defaultSpecifier.start! + scriptStartOffset!,
               defaultSpecifier.end! + scriptStartOffset!,
             )
           } else {
+            // 如果只有一个说明符且是 default，移除整个导出声明
             ctx.s.remove(
               node.start! + scriptStartOffset!,
               node.end! + scriptStartOffset!,
@@ -490,10 +581,15 @@ export function compileScript(
           )
         }
       } else if (
+        // 变量声明（如 const x = 1）
         (node.type === 'VariableDeclaration' ||
+          // 函数声明（如 function x() {}）
           node.type === 'FunctionDeclaration' ||
+          // 类声明（如 class X {}）
           node.type === 'ClassDeclaration' ||
+          // TypeScript 枚举声明（如 enum X { A, B }）
           node.type === 'TSEnumDeclaration') &&
+        // 排除 TypeScript 的声明语句（如 declare const x: string）
         !node.declare
       ) {
         walkDeclaration(
@@ -710,6 +806,7 @@ export function compileScript(
 
   // 4. check macro args to make sure it doesn't reference setup scope
   // variables
+  // 用于检查宏函数参数中是否引用了 setup 作用域的变量
   checkInvalidScopeReference(ctx.propsRuntimeDecl, DEFINE_PROPS)
   checkInvalidScopeReference(ctx.propsRuntimeDefaults, DEFINE_PROPS)
   checkInvalidScopeReference(ctx.propsDestructureDecl, DEFINE_PROPS)
@@ -1126,6 +1223,16 @@ function registerBinding(
   bindings[node.name] = type
 }
 
+/**
+ * 用于分析和处理组件中的声明语句，确定变量的绑定类型
+ * @param from  声明来源 'script' 或 'scriptSetup'
+ * @param node 声明节点
+ * @param bindings 存储变量绑定类型的对象
+ * @param userImportAliases 用户导入的别名映射
+ * @param hoistStatic 是否提升静态内容
+ * @param isPropsDestructureEnabled 是否启用 props 解构
+ * @returns
+ */
 function walkDeclaration(
   from: 'script' | 'scriptSetup',
   node: Declaration,
@@ -1136,8 +1243,11 @@ function walkDeclaration(
 ): boolean {
   let isAllLiteral = false
 
+  // 1、变量声明
   if (node.type === 'VariableDeclaration') {
     const isConst = node.kind === 'const'
+
+    // 是否所有声明都是字面量常量
     isAllLiteral =
       isConst &&
       node.declarations.every(
@@ -1201,6 +1311,8 @@ function walkDeclaration(
           bindingType = BindingTypes.SETUP_LET
         }
         registerBinding(bindings, id, bindingType)
+
+        // 解构模式
       } else {
         if (isCallOf(init, DEFINE_PROPS) && isPropsDestructureEnabled) {
           continue
@@ -1212,6 +1324,8 @@ function walkDeclaration(
         }
       }
     }
+
+    // 2、枚举声明
   } else if (node.type === 'TSEnumDeclaration') {
     isAllLiteral = node.members.every(
       member => !member.initializer || isStaticNode(member.initializer),
@@ -1219,6 +1333,8 @@ function walkDeclaration(
     bindings[node.id!.name] = isAllLiteral
       ? BindingTypes.LITERAL_CONST
       : BindingTypes.SETUP_CONST
+
+    // 3、 函数声明、类声明
   } else if (
     node.type === 'FunctionDeclaration' ||
     node.type === 'ClassDeclaration'

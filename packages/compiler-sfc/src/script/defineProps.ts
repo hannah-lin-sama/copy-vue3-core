@@ -44,6 +44,14 @@ export type PropsDestructureBindings = Record<
   }
 >
 
+/**
+ * Vue 3 编译器 SFC 模块，用于处理组件中 defineProps 调用
+ * @param ctx 编译上下文
+ * @param node
+ * @param declId
+ * @param isWithDefaults
+ * @returns
+ */
 export function processDefineProps(
   ctx: ScriptCompileContext,
   node: Node,
@@ -54,16 +62,20 @@ export function processDefineProps(
     return processWithDefaults(ctx, node, declId)
   }
 
+  // 确保组件中只调用一次 defineProps，如果已经调用过则报错
   if (ctx.hasDefinePropsCall) {
     ctx.error(`duplicate ${DEFINE_PROPS}() call`, node)
   }
-  ctx.hasDefinePropsCall = true
+  ctx.hasDefinePropsCall = true // 标记为已调用
+
+  // 记录 defineProps 的第一个参数作为运行时声明
   ctx.propsRuntimeDecl = node.arguments[0]
 
   // register bindings
   if (ctx.propsRuntimeDecl) {
     for (const key of getObjectOrArrayExpressionKeys(ctx.propsRuntimeDecl)) {
       if (!(key in ctx.bindingMetadata)) {
+        // 为每个键注册绑定类型为 PROP
         ctx.bindingMetadata[key] = BindingTypes.PROPS
       }
     }
@@ -72,12 +84,14 @@ export function processDefineProps(
   // call has type parameters - infer runtime types from it
   if (node.typeParameters) {
     if (ctx.propsRuntimeDecl) {
+      // 如果同时提供了运行时参数和类型参数，报错
       ctx.error(
         `${DEFINE_PROPS}() cannot accept both type and non-type arguments ` +
           `at the same time. Use one or the other.`,
         node,
       )
     }
+    // 记录类型参数作为类型声明
     ctx.propsTypeDecl = node.typeParameters.params[0]
   }
 
@@ -92,6 +106,13 @@ export function processDefineProps(
   return true
 }
 
+/**
+ * Vue 3 编译器 SFC 模块，用于处理组件中的 withDefaults 调用
+ * @param ctx
+ * @param node
+ * @param declId
+ * @returns
+ */
 function processWithDefaults(
   ctx: ScriptCompileContext,
   node: Node,
@@ -108,12 +129,15 @@ function processWithDefaults(
       true /* isWithDefaults */,
     )
   ) {
+    // 验证第一个参数
+    // 如果不是 defineProps 调用，则报错
     ctx.error(
       `${WITH_DEFAULTS}' first argument must be a ${DEFINE_PROPS} call.`,
       node.arguments[0] || node,
     )
   }
 
+  // withDefaults 只能与基于类型的 defineProps 声明一起使用，不能与运行时声明一起使用
   if (ctx.propsRuntimeDecl) {
     ctx.error(
       `${WITH_DEFAULTS} can only be used with type-based ` +
@@ -121,6 +145,8 @@ function processWithDefaults(
       node,
     )
   }
+
+  // 警告内容说明 withDefaults 与解构一起使用是不必要的，并且会禁用响应式解构
   if (declId && declId.type === 'ObjectPattern') {
     ctx.warn(
       `${WITH_DEFAULTS}() is unnecessary when using destructure with ${DEFINE_PROPS}().\n` +
@@ -129,7 +155,11 @@ function processWithDefaults(
       node.callee,
     )
   }
+
+  // 记录 withDefaults 的第二个参数作为运行时默认值
   ctx.propsRuntimeDefaults = node.arguments[1]
+
+  // 检查第二个参数是否存在，如果不存在则报错。
   if (!ctx.propsRuntimeDefaults) {
     ctx.error(`The 2nd argument of ${WITH_DEFAULTS} is required.`, node)
   }
@@ -138,11 +168,19 @@ function processWithDefaults(
   return true
 }
 
+/**
+ *  Vue 3 编译器 SFC 模块,用于生成组件运行时的 props 声明字符串
+ * @param ctx
+ * @returns
+ */
 export function genRuntimeProps(ctx: ScriptCompileContext): string | undefined {
   let propsDecls: undefined | string
 
+  // 处理运行时声明
   if (ctx.propsRuntimeDecl) {
     propsDecls = ctx.getString(ctx.propsRuntimeDecl).trim()
+
+    // 在解构声明
     if (ctx.propsDestructureDecl) {
       const defaults: string[] = []
       for (const key in ctx.propsDestructuredBindings) {
@@ -161,10 +199,12 @@ export function genRuntimeProps(ctx: ScriptCompileContext): string | undefined {
         )}(${propsDecls}, {\n  ${defaults.join(',\n  ')}\n})`
       }
     }
+    // 处理类型声明
   } else if (ctx.propsTypeDecl) {
     propsDecls = extractRuntimeProps(ctx)
   }
 
+  // 处理模型 props
   const modelsDecls = genModelProps(ctx)
 
   if (propsDecls && modelsDecls) {

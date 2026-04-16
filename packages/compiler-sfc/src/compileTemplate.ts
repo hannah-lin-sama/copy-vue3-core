@@ -104,11 +104,22 @@ function preprocess(
   return res
 }
 
+/**
+ * 编译 Vue 单文件组件中的模板部分
+ * @param options
+ * @returns
+ */
 export function compileTemplate(
   options: SFCTemplateCompileOptions,
 ): SFCTemplateCompileResults {
-  const { preprocessLang, preprocessCustomRequire } = options
+  const {
+    // 模板使用的语言类型（如 pug、haml 等）
+    preprocessLang,
+    // 自定义的预处理器加载函数
+    preprocessCustomRequire,
+  } = options
 
+  // 在浏览器环境中，并且指定了预处理器语言但未提供自定义加载函数时，抛出错误
   if (
     (__ESM_BROWSER__ || __GLOBAL__) &&
     preprocessLang &&
@@ -121,6 +132,7 @@ export function compileTemplate(
     )
   }
 
+  // 确定预处理器
   const preprocessor = preprocessLang
     ? preprocessCustomRequire
       ? preprocessCustomRequire(preprocessLang)
@@ -128,6 +140,7 @@ export function compileTemplate(
         ? undefined
         : consolidate[preprocessLang as keyof typeof consolidate]
     : false
+  // 使用预处理器处理模板
   if (preprocessor) {
     try {
       return doCompileTemplate({
@@ -143,6 +156,8 @@ export function compileTemplate(
         errors: [e],
       }
     }
+
+    // 处理未找到预处理器的情况
   } else if (preprocessLang) {
     return {
       code: `export default function render() {}`,
@@ -159,6 +174,11 @@ export function compileTemplate(
   }
 }
 
+/**
+ *
+ * @param param0
+ * @returns
+ */
 function doCompileTemplate({
   filename,
   id,

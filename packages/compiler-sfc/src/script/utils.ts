@@ -14,14 +14,23 @@ import path from 'path'
 
 export const UNKNOWN_TYPE = 'Unknown'
 
+/**
+ * 解析对象键
+ * 支持字符串、数字和标识符
+ * @param node 节点
+ * @param computed 是否为计算属性
+ * @returns 键值
+ */
 export function resolveObjectKey(
   node: Node,
   computed: boolean,
 ): string | undefined {
   switch (node.type) {
+    // 字符串和数字直接返回值
     case 'StringLiteral':
     case 'NumericLiteral':
       return String(node.value)
+    // 标识符在非计算属性中返回名称
     case 'Identifier':
       if (!computed) return node.name
   }

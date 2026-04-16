@@ -7,6 +7,12 @@ import type { SFCScriptBlock } from '../parse'
 
 export const normalScriptDefaultVar = `__default__`
 
+/**
+ * 处理普通 <script> 标签
+ * @param ctx 编译上下文
+ * @param scopeId 作用域 ID
+ * @returns 处理后的脚本块
+ */
 export function processNormalScript(
   ctx: ScriptCompileContext,
   scopeId: string,

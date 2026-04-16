@@ -104,6 +104,12 @@ export const parseCache:
   | Map<string, SFCParseResult>
   | LRUCache<string, SFCParseResult> = createCache<SFCParseResult>()
 
+/**
+ * 解析 SFC 字符串
+ * @param source SFC 字符串
+ * @param options 解析选项
+ * @returns 解析结果
+ */
 export function parse(
   source: string,
   options: SFCParseOptions = {},
@@ -166,12 +172,14 @@ export function parse(
     switch (node.tag) {
       case 'template':
         if (!descriptor.template) {
+          // 创建一个块对象，记录模板的位置、属性等信息
           const templateBlock = (descriptor.template = createBlock(
             node,
             source,
             false,
           ) as SFCTemplateBlock)
 
+          // 将模板的子节点解析为 AST 根节点
           if (!templateBlock.attrs.src) {
             templateBlock.ast = createRoot(node.children, source)
           }
@@ -194,8 +202,12 @@ export function parse(
         }
         break
       case 'script':
+        // 创建一个脚本块对象
         const scriptBlock = createBlock(node, source, pad) as SFCScriptBlock
+
+        // Setup 脚本识别
         const isSetup = !!scriptBlock.attrs.setup
+
         if (isSetup && !descriptor.scriptSetup) {
           descriptor.scriptSetup = scriptBlock
           break
@@ -206,8 +218,11 @@ export function parse(
         }
         errors.push(createDuplicateBlockError(node, isSetup))
         break
+
       case 'style':
         const styleBlock = createBlock(node, source, pad) as SFCStyleBlock
+
+        // 检测已废弃的 <style vars> 语法
         if (styleBlock.attrs.vars) {
           errors.push(
             new SyntaxError(
@@ -223,6 +238,8 @@ export function parse(
         break
     }
   })
+
+  // 至少有一个 <template> 或 <script> 或 <script setup> 模块存在
   if (!descriptor.template && !descriptor.script && !descriptor.scriptSetup) {
     errors.push(
       new SyntaxError(
@@ -230,7 +247,9 @@ export function parse(
       ),
     )
   }
+
   if (descriptor.scriptSetup) {
+    // <script setup> 模块不可有 src 属性
     if (descriptor.scriptSetup.src) {
       errors.push(
         new SyntaxError(
@@ -240,6 +259,7 @@ export function parse(
       )
       descriptor.scriptSetup = null
     }
+    // <script setup> 存在时，<script> 模块不可有 src 属性
     if (descriptor.script && descriptor.script.src) {
       errors.push(
         new SyntaxError(
@@ -253,6 +273,8 @@ export function parse(
 
   // dedent pug/jade templates
   let templateColumnOffset = 0
+
+  // 模板语言为 pug 或 jade 时，进行缩进处理
   if (
     descriptor.template &&
     (descriptor.template.lang === 'pug' || descriptor.template.lang === 'jade')
@@ -264,6 +286,7 @@ export function parse(
 
   if (sourceMap) {
     const genMap = (block: SFCBlock | null, columnOffset = 0) => {
+      // 确保块不是外部引入的（有 src 属性的块不需要生成 SourceMap）
       if (block && !block.src) {
         block.map = generateSourceMap(
           filename,
@@ -275,18 +298,26 @@ export function parse(
         )
       }
     }
+    // template 块
     genMap(descriptor.template, templateColumnOffset)
+    // 脚本块
     genMap(descriptor.script)
+    // 样式块
     descriptor.styles.forEach(s => genMap(s))
+    // 自定义块
     descriptor.customBlocks.forEach(s => genMap(s))
   }
 
   // parse CSS vars
+  // 解析 CSS 变量的函数，从组件描述符中提取 CSS 变量
   descriptor.cssVars = parseCssVars(descriptor)
 
   // check if the SFC uses :slotted
+  // :slotted 选择器检测
   const slottedRE = /(?:::v-|:)slotted\(/
+
   descriptor.slotted = descriptor.styles.some(
+    // 组件是否使用了 :slotted 选择器
     s => s.scoped && slottedRE.test(s.content),
   )
 
@@ -311,35 +342,54 @@ function createDuplicateBlockError(
   return err
 }
 
+/**
+ *  Vue 3 编译器 SFC 模块,用于创建 SFC (Single File Component) 块对象
+ * @param node 元素节点
+ * @param source 源代码
+ * @param pad 是否填充内容
+ * @returns 块对象
+ */
 function createBlock(
   node: ElementNode,
   source: string,
   pad: SFCParseOptions['pad'],
 ): SFCBlock {
+  // 从节点标签获取块类型（如 template、script、style）
   const type = node.tag
+  // 获取节点的内部位置信息，用于提取内容
   const loc = node.innerLoc!
+  // 初始化属性对象，存储块的属性
   const attrs: Record<string, string | true> = {}
   const block: SFCBlock = {
     type,
+    // 从源代码中提取的块内容
     content: source.slice(loc.start.offset, loc.end.offset),
     loc,
     attrs,
   }
+
+  // 处理内容填充，根据 pad 选项添加前导空格
   if (pad) {
     block.content = padContent(source, block, pad) + block.content
   }
+
+  // 处理属性，将属性值存储到块对象的 attrs 中
   node.props.forEach(p => {
     if (p.type === NodeTypes.ATTRIBUTE) {
       const name = p.name
       attrs[name] = p.value ? p.value.content || true : true
       if (name === 'lang') {
+        // 设置块语言
         block.lang = p.value && p.value.content
       } else if (name === 'src') {
+        // 设置块源文件路径
         block.src = p.value && p.value.content
       } else if (type === 'style') {
         if (name === 'scoped') {
+          // 设置块是否为作用域样式
           ;(block as SFCStyleBlock).scoped = true
         } else if (name === 'module') {
+          // 设置 module 属性
           ;(block as SFCStyleBlock).module = attrs[name]
         }
       } else if (type === 'script' && name === 'setup') {
@@ -349,11 +399,23 @@ function createBlock(
   })
   return block
 }
-
+// 换行符 \n 或者 \r\n
 const splitRE = /\r?\n/g
+// 匹配空行或注释行的正则表达式
 const emptyRE = /^(?:\/\/)?\s*$/
+// 匹配任意字符（除了换行符）
 const replaceRE = /./g
 
+/**
+ * 生成 SourceMap
+ * @param filename 源文件名
+ * @param source 源代码
+ * @param generated 生成的代码
+ * @param sourceRoot 源根目录
+ * @param lineOffset 行偏移量
+ * @param columnOffset 列偏移量
+ * @returns SourceMap 对象
+ */
 function generateSourceMap(
   filename: string,
   source: string,
@@ -362,12 +424,16 @@ function generateSourceMap(
   lineOffset: number,
   columnOffset: number,
 ): RawSourceMap {
+  // 初始化 SourceMapGenerator
   const map = new SourceMapGenerator({
     file: filename.replace(/\\/g, '/'),
     sourceRoot: sourceRoot.replace(/\\/g, '/'),
   }) as unknown as CodegenSourceMapGenerator
+
   map.setSourceContent(filename, source)
   map._sources.add(filename)
+
+  // 按换行符将生成的代码分割成行
   generated.split(splitRE).forEach((line, index) => {
     if (!emptyRE.test(line)) {
       const originalLine = index + 1 + lineOffset

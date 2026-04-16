@@ -13,6 +13,8 @@ export function rewriteDefault(
     sourceType: 'module',
     plugins: resolveParserPlugins('js', parserPlugins),
   }).program.body
+
+  // 创建 MagicString 实例
   const s = new MagicString(input)
 
   rewriteDefaultAST(ast, s, as)
