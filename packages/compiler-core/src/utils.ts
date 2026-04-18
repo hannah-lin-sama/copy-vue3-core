@@ -87,27 +87,34 @@ const getExpSource = (exp: ExpressionNode): string =>
  * lax and only checks validity at the root level (i.e. does not validate exps
  * inside square brackets), but it's ok since these are only used on template
  * expressions and false positives are invalid expressions in the first place.
+ * Vue 3 编译器在浏览器环境中用于判断一个表达式是否为成员表达式
+ * 成员表达式通常指形如 obj.prop、obj[prop] 这样的表达式
  */
 export const isMemberExpressionBrowser = (exp: ExpressionNode): boolean => {
   // remove whitespaces around . or [ first
-  const path = getExpSource(exp)
+  const path = getExpSource(exp) // 获取表达式的源代码字符串
     .trim()
+    // 移除 . 或 [ 周围的空格，标准化表达式格式
     .replace(whitespaceRE, s => s.trim())
 
   let state = MemberExpLexState.inMemberExp
   let stateStack: MemberExpLexState[] = []
-  let currentOpenBracketCount = 0
-  let currentOpenParensCount = 0
+  let currentOpenBracketCount = 0 // 当前未闭合的方括号计数
+  let currentOpenParensCount = 0 // 当前未闭合的圆括号计数
+  // 当前字符串的引号类型（单引号、双引号或反引号）
   let currentStringType: "'" | '"' | '`' | null = null
 
   for (let i = 0; i < path.length; i++) {
     const char = path.charAt(i)
     switch (state) {
+      // 成员表达式内部状态
       case MemberExpLexState.inMemberExp:
+        // 遇到 [：进入 inBrackets 状态，更新计数和状态栈
         if (char === '[') {
           stateStack.push(state)
           state = MemberExpLexState.inBrackets
           currentOpenBracketCount++
+          // 遇到 (：进入 inParens 状态，更新计数和状态栈
         } else if (char === '(') {
           stateStack.push(state)
           state = MemberExpLexState.inParens
@@ -118,37 +125,49 @@ export const isMemberExpressionBrowser = (exp: ExpressionNode): boolean => {
           return false
         }
         break
+      // 方括号内部状态
       case MemberExpLexState.inBrackets:
+        // 遇到引号：进入 inString 状态
         if (char === `'` || char === `"` || char === '`') {
           stateStack.push(state)
           state = MemberExpLexState.inString
           currentStringType = char
+          // 遇到 [：增加方括号计数
         } else if (char === `[`) {
           currentOpenBracketCount++
+          // 遇到 ]：减少方括号计数，若计数为 0 则返回上一状态
         } else if (char === `]`) {
           if (!--currentOpenBracketCount) {
             state = stateStack.pop()!
           }
         }
         break
+      // 圆括号内部状态
       case MemberExpLexState.inParens:
+        // 遇到引号：进入 inString 状态
         if (char === `'` || char === `"` || char === '`') {
           stateStack.push(state)
           state = MemberExpLexState.inString
           currentStringType = char
+          // 遇到 (：增加圆括号计数
         } else if (char === `(`) {
           currentOpenParensCount++
+          // 遇到 )
         } else if (char === `)`) {
           // if the exp ends as a call then it should not be considered valid
+          // 若为表达式最后一个字符，则返回 false（排除函数调用）
           if (i === path.length - 1) {
             return false
           }
+          // 减少圆括号计数，若计数为 0 则返回上一状态
           if (!--currentOpenParensCount) {
             state = stateStack.pop()!
           }
         }
         break
+      // 字符串内部状态
       case MemberExpLexState.inString:
+        // 遇到与当前字符串类型匹配的引号：返回上一状态
         if (char === currentStringType) {
           state = stateStack.pop()!
           currentStringType = null
@@ -156,9 +175,13 @@ export const isMemberExpressionBrowser = (exp: ExpressionNode): boolean => {
         break
     }
   }
+  // 只有当方括号和圆括号都闭合时，才认为是有效的成员表达式
   return !currentOpenBracketCount && !currentOpenParensCount
 }
 
+/**
+ * Vue 3 编译器在非浏览器环境中用于判断一个表达式是否为成员表达式
+ */
 export const isMemberExpressionNode: (
   exp: ExpressionNode,
   context: TransformContext,
@@ -175,8 +198,11 @@ export const isMemberExpressionNode: (
           })
         ret = unwrapTSNode(ret) as Expression
         return (
+          // 普通成员表达式（如 obj.prop）
           ret.type === 'MemberExpression' ||
+          // 可选链成员表达式（如 obj?.prop）
           ret.type === 'OptionalMemberExpression' ||
+          // 单独的标识符（如 handleClick），但排除 undefined
           (ret.type === 'Identifier' && ret.name !== 'undefined')
         )
       } catch (e) {

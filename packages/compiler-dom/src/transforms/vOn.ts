@@ -89,6 +89,12 @@ const resolveModifiers = (
   }
 }
 
+/**
+ *
+ * @param key
+ * @param event
+ * @returns
+ */
 const transformClick = (key: ExpressionNode, event: string) => {
   const isStaticClick =
     isStaticExp(key) && key.content.toLowerCase() === 'onclick'
@@ -105,6 +111,14 @@ const transformClick = (key: ExpressionNode, event: string) => {
       : key
 }
 
+/**
+ * 处理 v-on 指令
+ * @param dir
+ * @param dir
+ * @param node
+ * @param context
+ * @returns
+ */
 export const transformOn: DirectiveTransform = (dir, node, context) => {
   return baseTransform(dir, node, context, baseResult => {
     const { modifiers } = dir
