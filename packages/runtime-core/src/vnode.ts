@@ -266,6 +266,7 @@ export let currentBlock: VNode['dynamicChildren'] = null
 
 /**
  * Open a block.
+ * 打开一个新的块（Block），并设置当前块的跟踪状态
  * This must be called before `createBlock`. It cannot be part of `createBlock`
  * because the children of the block are evaluated before `createBlock` itself
  * is called. The generated code typically looks like this:
@@ -281,6 +282,8 @@ export let currentBlock: VNode['dynamicChildren'] = null
  * @private
  */
 export function openBlock(disableTracking = false): void {
+  // 设置当前块
+  // 推入块栈
   blockStack.push((currentBlock = disableTracking ? null : []))
 }
 
@@ -320,14 +323,22 @@ export function setBlockTracking(value: number, inVOnce = false): void {
   }
 }
 
+/**
+ * 将普通虚拟节点转换为块虚拟节点（Block VNode）
+ * @param vnode
+ * @returns
+ */
 function setupBlock(vnode: VNode) {
   // save current block children on the block vnode
+  // 保存动态子节点
+  // 只有当 isBlockTreeEnabled > 0 时才启用跟踪
   vnode.dynamicChildren =
     isBlockTreeEnabled > 0 ? currentBlock || (EMPTY_ARR as any) : null
   // close block
   closeBlock()
   // a block is always going to be patched, so track it as a child of its
   // parent block
+  // 只有当 isBlockTreeEnabled > 0 时才启用跟踪
   if (isBlockTreeEnabled > 0 && currentBlock) {
     currentBlock.push(vnode)
   }
@@ -335,17 +346,20 @@ function setupBlock(vnode: VNode) {
 }
 
 /**
+ * 创建元素块虚拟节点（Block VNode）
  * @private
  */
 export function createElementBlock(
-  type: string | typeof Fragment,
-  props?: Record<string, any> | null,
-  children?: any,
-  patchFlag?: number,
-  dynamicProps?: string[],
-  shapeFlag?: number,
+  type: string | typeof Fragment, // 字符串或 Fragment 符号，表示元素的标签名或片段
+  props?: Record<string, any> | null, // 可选的属性对象，包含元素的属性、事件等
+  children?: any, // 选的子节点，可以是字符串、数字、VNode 数组等
+  patchFlag?: number, // 可选的补丁标志，用于优化更新过程
+  dynamicProps?: string[], // 可选的动态属性数组，指定哪些属性是动态的
+  shapeFlag?: number, // 可选的形状标志，表示 VNode 的类型
 ): VNode {
+  // 将基础 VNode 转换为块节点
   return setupBlock(
+    // 创建基础 VNode，设置各种属性和标志
     createBaseVNode(
       type,
       props,

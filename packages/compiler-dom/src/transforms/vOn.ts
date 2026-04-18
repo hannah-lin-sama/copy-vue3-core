@@ -112,31 +112,37 @@ const transformClick = (key: ExpressionNode, event: string) => {
 }
 
 /**
- * 处理 v-on 指令
- * @param dir
- * @param dir
- * @param node
- * @param context
+ * 处理 DOM 相关的事件修饰符，如 .prevent、.stop、.enter 等，并生成相应的编译结果。
+ * @param dir 指令节点
+ * @param node 当前元素节点
+ * @param context 编译上下文
  * @returns
  */
 export const transformOn: DirectiveTransform = (dir, node, context) => {
   return baseTransform(dir, node, context, baseResult => {
     const { modifiers } = dir
+    // 如果没有修饰符，直接返回基础转换结果
     if (!modifiers.length) return baseResult
 
+    // 提取基础结果
     let { key, value: handlerExp } = baseResult.props[0]
+    // 解析修饰符
     const { keyModifiers, nonKeyModifiers, eventOptionModifiers } =
       resolveModifiers(key, modifiers, context, dir.loc)
 
     // normalize click.right and click.middle since they don't actually fire
+    // 原因：这两种点击事件在浏览器中不会实际触发 click 事件，需要特殊处理
+    // 右键点击：将 click.right 转换为 contextmenu 事件
     if (nonKeyModifiers.includes('right')) {
       key = transformClick(key, `onContextmenu`)
     }
+    // 中键点击：将 click.middle 转换为 mouseup 事件
     if (nonKeyModifiers.includes('middle')) {
       key = transformClick(key, `onMouseup`)
     }
 
     if (nonKeyModifiers.length) {
+      // 创建修饰符包装
       handlerExp = createCallExpression(context.helper(V_ON_WITH_MODIFIERS), [
         handlerExp,
         JSON.stringify(nonKeyModifiers),
@@ -148,6 +154,7 @@ export const transformOn: DirectiveTransform = (dir, node, context) => {
       // if event name is dynamic, always wrap with keys guard
       (!isStaticExp(key) || isKeyboardEvent(key.content.toLowerCase()))
     ) {
+      // 创建键盘修饰符包装
       handlerExp = createCallExpression(context.helper(V_ON_WITH_KEYS), [
         handlerExp,
         JSON.stringify(keyModifiers),

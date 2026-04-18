@@ -191,21 +191,30 @@ export interface AttributeNode extends Node {
 }
 
 export interface DirectiveNode extends Node {
+  /**
+   * 指令节点类型
+   */
   type: NodeTypes.DIRECTIVE
   /**
    * the normalized name without prefix or shorthands, e.g. "bind", "on"
+   * 指令名称，不包含前缀或短语
    */
   name: string
   /**
    * the raw attribute name, preserving shorthand, and including arg & modifiers
    * this is only used during parse.
+   * 原始名称
    */
   rawName?: string
+  // 事件处理表达式
   exp: ExpressionNode | undefined
+  // 事件处理参数
   arg: ExpressionNode | undefined
+  // 事件处理修饰符
   modifiers: SimpleExpressionNode[]
   /**
    * optional property to cache the expression parse result for v-for
+   * 用于缓存 v-for 指令的表达式解析结果的可选属性
    */
   forParseResult?: ForParseResult
 }
@@ -223,9 +232,13 @@ export enum ConstantTypes {
 }
 
 export interface SimpleExpressionNode extends Node {
+  // 简单表达式
   type: NodeTypes.SIMPLE_EXPRESSION
+  // 表达式内容
   content: string
+  // 是否为静态表达式
   isStatic: boolean
+  // 常量类型
   constType: ConstantTypes
   /**
    * - `null` means the expression is a simple identifier that doesn't need
@@ -670,18 +683,33 @@ export function createObjectExpression(
   }
 }
 
+/**
+ * 创建对象属性的 AST 节点
+ * @param key 属性键，可以是字符串或表达式节点
+ * @param value 属性值
+ * @returns 创建的属性节点
+ */
 export function createObjectProperty(
   key: Property['key'] | string,
   value: Property['value'],
 ): Property {
   return {
+    // JavaScript 对象属性节点
     type: NodeTypes.JS_PROPERTY,
-    loc: locStub,
+    loc: locStub, // 位置信息
     key: isString(key) ? createSimpleExpression(key, true) : key,
     value,
   }
 }
 
+/**
+ * 创建简单表达式的 AST 节点
+ * @param content 表达式内容
+ * @param isStatic 是否为静态表达式
+ * @param loc 位置信息
+ * @param constType 常量类型
+ * @returns
+ */
 export function createSimpleExpression(
   content: SimpleExpressionNode['content'],
   isStatic: SimpleExpressionNode['isStatic'] = false,
@@ -689,10 +717,12 @@ export function createSimpleExpression(
   constType: ConstantTypes = ConstantTypes.NOT_CONSTANT,
 ): SimpleExpressionNode {
   return {
+    // 简单表达式节点
     type: NodeTypes.SIMPLE_EXPRESSION,
     loc,
-    content,
-    isStatic,
+    content, // 表达式内容
+    isStatic, // 是否为静态表达式
+    // 可以安全地字符串化
     constType: isStatic ? ConstantTypes.CAN_STRINGIFY : constType,
   }
 }
@@ -710,6 +740,12 @@ export function createInterpolation(
   }
 }
 
+/**
+ * 创建复合表达式节点
+ * @param children 子表达式节点数组
+ * @param loc 位置信息
+ * @returns 复合表达式节点
+ */
 export function createCompoundExpression(
   children: CompoundExpressionNode['children'],
   loc: SourceLocation = locStub,
@@ -725,13 +761,20 @@ type InferCodegenNodeType<T> = T extends typeof RENDER_SLOT
   ? RenderSlotCall
   : CallExpression
 
+/**
+ * 创建 JavaScript 调用表达式的 AST 节点
+ * @param callee 指定被调用的函数或表达式，可以是标识符、成员表达式等
+ * @param args 传递给被调用函数的参数列表
+ * @param loc 位置信息
+ * @returns
+ */
 export function createCallExpression<T extends CallExpression['callee']>(
   callee: T,
   args: CallExpression['arguments'] = [],
   loc: SourceLocation = locStub,
 ): InferCodegenNodeType<T> {
   return {
-    type: NodeTypes.JS_CALL_EXPRESSION,
+    type: NodeTypes.JS_CALL_EXPRESSION, // 节点类型为 JavaScript 调用表达式
     loc,
     callee,
     arguments: args,
@@ -778,11 +821,11 @@ export function createCacheExpression(
   inVOnce: boolean = false,
 ): CacheExpression {
   return {
-    type: NodeTypes.JS_CACHE_EXPRESSION,
-    index,
+    type: NodeTypes.JS_CACHE_EXPRESSION, // 缓存表达式节点
+    index, // 缓存索引
     value,
     needPauseTracking: needPauseTracking,
-    inVOnce,
+    inVOnce, // 是否在 v-once 中
     needArraySpread: false,
     loc: locStub,
   }

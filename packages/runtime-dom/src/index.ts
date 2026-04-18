@@ -96,6 +96,8 @@ export const hydrate = ((...args) => {
 }) as RootHydrateFunction
 
 export const createApp = ((...args) => {
+  // 创建应用实例
+  // ensureRenderer 确保渲染器存在（如果不存在，会创建一个新的渲染器）
   const app = ensureRenderer().createApp(...args)
 
   if (__DEV__) {
@@ -104,11 +106,16 @@ export const createApp = ((...args) => {
   }
 
   const { mount } = app
+
+  // 重写 mount 方法
   app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {
     const container = normalizeContainer(containerOrSelector)
+    // 确保容器元素存在（如果不存在，会返回 null）
     if (!container) return
 
     const component = app._component
+
+    //
     if (!isFunction(component) && !component.render && !component.template) {
       // __UNSAFE__
       // Reason: potential execution of JS expressions in in-DOM template.
@@ -132,9 +139,11 @@ export const createApp = ((...args) => {
 
     // clear content before mounting
     if (container.nodeType === 1) {
-      container.textContent = ''
+      container.textContent = '' // 清空容器内容
     }
+    // 挂载应用实例到容器元素
     const proxy = mount(container, false, resolveRootNamespace(container))
+    // 移除 v-cloak 属性，添加 data-v-app 属性
     if (container instanceof Element) {
       container.removeAttribute('v-cloak')
       container.setAttribute('data-v-app', '')

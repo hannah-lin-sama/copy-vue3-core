@@ -107,6 +107,8 @@ const camelizeRE = /-\w/g
  */
 export const camelize: (str: string) => string = cacheStringFunction(
   (str: string): string => {
+    // /-(\w)/g：匹配短横线后跟一个单词字符（字母、数字或下划线）
+    // 将匹配到的短横线后的字符转换为大写
     return str.replace(camelizeRE, c => c.slice(1).toUpperCase())
   },
 )
@@ -128,12 +130,14 @@ export const capitalize: <T extends string>(str: T) => Capitalize<T> =
   })
 
 /**
+ * 将事件名转换为事件处理器键名
  * @private
  */
 export const toHandlerKey: <T extends string>(
   str: T,
 ) => T extends '' ? '' : `on${Capitalize<T>}` = cacheStringFunction(
   <T extends string>(str: T) => {
+    // 添加 on 前缀并将首字母大写
     const s = str ? `on${capitalize(str)}` : ``
     return s as T extends '' ? '' : `on${Capitalize<T>}`
   },

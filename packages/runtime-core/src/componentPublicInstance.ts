@@ -405,16 +405,24 @@ export const isReservedPrefix = (key: string): key is '_' | '$' =>
 const hasSetupBinding = (state: Data, key: string) =>
   state !== EMPTY_OBJ && !state.__isScriptSetup && hasOwn(state, key)
 
+/**
+ * 实现组件公共实例的代理
+ * 是 Vue 3 组件实例系统的核心部分，负责处理组件实例的属性访问、修改、检查和定义等操作
+ */
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
+  // 处理组件实例的属性访问
   get({ _: instance }: ComponentRenderContext, key: string) {
+    // 响应式标志位
     if (key === ReactiveFlags.SKIP) {
       return true
     }
 
+    // 组件实例属性
     const { ctx, setupState, data, props, accessCache, type, appContext } =
       instance
 
     // for internal formatters to know that this is a Vue instance
+    // 内部
     if (__DEV__ && key === '__isVue') {
       return true
     }
@@ -425,16 +433,22 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     // is the multiple hasOwn() calls. It's much faster to do a simple property
     // access on a plain object, so we use an accessCache object (with null
     // prototype) to memoize what access type a key corresponds to.
+    // 非 $ 开头的属性查找
     if (key[0] !== '$') {
+      // 从访问缓存中获取属性访问类型
       const n = accessCache![key]
       if (n !== undefined) {
         switch (n) {
+          // 组合式 API 中 setup 函数返回的状态
           case AccessTypes.SETUP:
             return setupState[key]
+          // 选项 API 中的数据
           case AccessTypes.DATA:
             return data[key]
+          // 组件上下文
           case AccessTypes.CONTEXT:
             return ctx[key]
+          // 组件的 props
           case AccessTypes.PROPS:
             return props![key]
           // default: just fallthrough
@@ -460,28 +474,41 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       }
     }
 
+    // $ 开头的属性查找
+    // 公共属性：如 $data、$props、$attrs 等
     const publicGetter = publicPropertiesMap[key]
     let cssModule, globalProperties
     // public $xxx properties
     if (publicGetter) {
       if (key === '$attrs') {
+        // 对于 $attrs，跟踪其访问，确保响应式更新
         track(instance.attrs, TrackOpTypes.GET, '')
         __DEV__ && markAttrsAccessed()
       } else if (__DEV__ && key === '$slots') {
         // for HMR only
+        // 在开发环境中，对于 $slots 也进行跟踪（用于热更新）
         track(instance, TrackOpTypes.GET, key)
       }
+      // 调用找到的 getter 函数获取属性值
       return publicGetter(instance)
+
+      // CSS 模块处理
     } else if (
       // css module (injected by vue-loader)
+      // 检查 CSS 模块
+      // 查组件类型是否有 __cssModules 属性，且该模块中是否包含请求的键
       (cssModule = type.__cssModules) &&
       (cssModule = cssModule[key])
     ) {
       return cssModule
+
+      // 自定义 $ 开头属性处理
     } else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
       // user may set custom properties to `this` that start with `$`
       accessCache![key] = AccessTypes.CONTEXT
       return ctx[key]
+
+      // 全局属性处理
     } else if (
       // global properties
       ((globalProperties = appContext.config.globalProperties),
@@ -498,14 +525,17 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       } else {
         return globalProperties[key]
       }
+
+      // 开发环境警告
     } else if (
       __DEV__ &&
       currentRenderingInstance &&
+      // 键不是字符串
       (!isString(key) ||
-        // #1091 avoid internal isRef/isVNode checks on component instance leading
-        // to infinite warning loop
+        //不是以 __v 开头的内部属性
         key.indexOf('__v') !== 0)
     ) {
+      // 警告信息：建议通过 $data 访问该属性，因为它以保留字符开头，不会在渲染上下文中被代理
       if (data !== EMPTY_OBJ && isReservedPrefix(key[0]) && hasOwn(data, key)) {
         warn(
           `Property ${JSON.stringify(
@@ -513,6 +543,8 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
           )} must be accessed via $data because it starts with a reserved ` +
             `character ("$" or "_") and is not proxied on the render context.`,
         )
+
+        // 当访问未定义的属性时，在开发环境发出警告
       } else if (instance === currentRenderingInstance) {
         warn(
           `Property ${JSON.stringify(key)} was accessed during render ` +

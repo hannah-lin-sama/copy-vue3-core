@@ -124,31 +124,37 @@ export interface TransformContext
   filters?: Set<string>
 }
 
+/**
+ * 创建编译转换的上下文对象
+ * @param root 编译的根节点，通常是模板的 AST 根节点
+ * @param param 编译转换的配置选项
+ * @returns
+ */
 export function createTransformContext(
   root: RootNode,
   {
-    filename = '',
-    prefixIdentifiers = false,
-    hoistStatic = false,
-    hmr = false,
-    cacheHandlers = false,
-    nodeTransforms = [],
-    directiveTransforms = {},
-    transformHoist = null,
-    isBuiltInComponent = NOOP,
-    isCustomElement = NOOP,
-    expressionPlugins = [],
-    scopeId = null,
-    slotted = true,
-    ssr = false,
-    inSSR = false,
-    ssrCssVars = ``,
-    bindingMetadata = EMPTY_OBJ,
-    inline = false,
-    isTS = false,
-    onError = defaultOnError,
-    onWarn = defaultOnWarn,
-    compatConfig,
+    filename = '', // 当前编译的文件名
+    prefixIdentifiers = false, // 是否为标识符添加前缀
+    hoistStatic = false, // 是否提升静态内容
+    hmr = false, // 是否开启热模块替换（HMR）
+    cacheHandlers = false, // 是否缓存事件处理器
+    nodeTransforms = [], // 节点转换函数数组
+    directiveTransforms = {}, // 指令转换函数对象
+    transformHoist = null, // 静态内容提升的转换器
+    isBuiltInComponent = NOOP, // 是否为内置组件
+    isCustomElement = NOOP, // 是否为自定义元素
+    expressionPlugins = [], // 表达式插件数组
+    scopeId = null, // 当前作用域的 ID
+    slotted = true, // 是否为插槽
+    ssr = false, // 是否为服务端渲染
+    inSSR = false, // 是否在服务端渲染中
+    ssrCssVars = ``, // 服务端渲染时的 CSS 变量
+    bindingMetadata = EMPTY_OBJ, // 绑定元数据对象
+    inline = false, // 是否内联
+    isTS = false, // 是否为 TypeScript 代码
+    onError = defaultOnError, // 错误处理函数
+    onWarn = defaultOnWarn, // 警告处理函数
+    compatConfig, // 兼容配置对象
   }: TransformOptions,
 ): TransformContext {
   const nameMatch = filename.replace(/\?.*$/, '').match(/([^/\\]+)\.\w+$/)
@@ -180,33 +186,42 @@ export function createTransformContext(
 
     // state
     root,
-    helpers: new Map(),
-    components: new Set(),
-    directives: new Set(),
-    hoists: [],
-    imports: [],
-    cached: [],
-    constantCache: new WeakMap(),
-    temps: 0,
-    identifiers: Object.create(null),
+    helpers: new Map(), // 辅助函数映射
+    components: new Set(), // 组件集合
+    directives: new Set(), // 指令集合
+    hoists: [], // 提升的静态内容
+    imports: [], // 导入的模块
+    cached: [], // 缓存的表达式
+    constantCache: new WeakMap(), // 常量缓存
+    temps: 0, // 临时变量计数器
+    identifiers: Object.create(null), // 标识符使用情况
     scopes: {
       vFor: 0,
       vSlot: 0,
       vPre: 0,
       vOnce: 0,
     },
-    parent: null,
-    grandParent: null,
-    currentNode: root,
-    childIndex: 0,
-    inVOnce: false,
+    parent: null, // 当前节点的父节点
+    grandParent: null, // 当前节点的祖父节点
+    currentNode: root, // 当前处理的节点
+    childIndex: 0, // 当前子节点的索引
+    inVOnce: false, // 是否在 v-once 中
 
     // methods
+    /**
+     * 注册并返回辅助函数
+     * @param name 辅助函数的名称
+     * @returns 辅助函数的名称
+     */
     helper(name) {
       const count = context.helpers.get(name) || 0
       context.helpers.set(name, count + 1)
       return name
     },
+    /**
+     * 移除辅助函数的引用计数
+     * @param name 辅助函数的名称
+     */
     removeHelper(name) {
       const count = context.helpers.get(name)
       if (count) {
@@ -218,15 +233,26 @@ export function createTransformContext(
         }
       }
     },
+    /**
+     * 获取辅助函数的字符串表示
+     * @param name 辅助函数的名称
+     * @returns 辅助函数的字符串表示
+     */
     helperString(name) {
       return `_${helperNameMap[context.helper(name)]}`
     },
+    /**
+     * 替换当前节点为指定节点
+     * @param node 新节点
+     */
     replaceNode(node) {
       /* v8 ignore start */
       if (__DEV__) {
+        // 不存在则抛出错误（节点已被移除）
         if (!context.currentNode) {
           throw new Error(`Node being replaced is already removed.`)
         }
+        // 不存在则抛出错误（不能替换根节点）
         if (!context.parent) {
           throw new Error(`Cannot replace root node.`)
         }
@@ -234,35 +260,49 @@ export function createTransformContext(
       /* v8 ignore stop */
       context.parent!.children[context.childIndex] = context.currentNode = node
     },
+    /**
+     * 移除当前节点或指定节点
+     * @param node
+     */
     removeNode(node) {
       /* v8 ignore next 3 */
+      // 不存在则抛出错误（不能移除根节点）
       if (__DEV__ && !context.parent) {
         throw new Error(`Cannot remove root node.`)
       }
       const list = context.parent!.children
+      // 计算移除索引
       const removalIndex = node
         ? list.indexOf(node)
         : context.currentNode
           ? context.childIndex
           : -1
       /* v8 ignore next 3 */
+      // 找不到节点，则抛出错误
       if (__DEV__ && removalIndex < 0) {
         throw new Error(`node being removed is not a child of current parent`)
       }
+      // 当前节点被移除：如果没有提供 node 参数或 node 是当前节点
       if (!node || node === context.currentNode) {
         // current node removed
         context.currentNode = null
         context.onNodeRemoved()
       } else {
         // sibling node removed
+        // 兄弟节点被移除：如果 node 是当前节点的兄弟节点
         if (context.childIndex > removalIndex) {
           context.childIndex--
           context.onNodeRemoved()
         }
       }
+      // 从父节点的子数组中移除指定索引的节点
       context.parent!.children.splice(removalIndex, 1)
     },
     onNodeRemoved: NOOP,
+    /**
+     * 添加标识符引用计数
+     * @param exp 表达式节点
+     */
     addIdentifiers(exp) {
       // identifier tracking only happens in non-browser builds.
       if (!__BROWSER__) {
@@ -275,6 +315,10 @@ export function createTransformContext(
         }
       }
     },
+    /**
+     * 移除标识符引用计数
+     * @param exp 表达式节点
+     */
     removeIdentifiers(exp) {
       if (!__BROWSER__) {
         if (isString(exp)) {
@@ -286,25 +330,44 @@ export function createTransformContext(
         }
       }
     },
+    /**
+     * 提升静态内容
+     * @param exp 表达式节点
+     * @returns
+     */
     hoist(exp) {
+      // 如果输入 exp 是字符串，将其转换为简单表达式节点
       if (isString(exp)) exp = createSimpleExpression(exp)
+      // 存储所有提升的静态内容
       context.hoists.push(exp)
+      // 创建一个新的简单表达式节点作为标识符
       const identifier = createSimpleExpression(
+        // 标识符名称为 _hoisted_ 加上提升数组的长度（确保唯一性）
         `_hoisted_${context.hoists.length}`,
         false,
         exp.loc,
-        ConstantTypes.CAN_CACHE,
+        ConstantTypes.CAN_CACHE, // 缓存
       )
+      // 关联提升的表达式
       identifier.hoisted = exp
       return identifier
     },
+    /**
+     * 缓存表达式节点
+     * @param exp 表达式节点
+     * @param isVNode 是否为 vnode
+     * @param inVOnce 是否在 v-once 中
+     * @returns
+     */
     cache(exp, isVNode = false, inVOnce = false) {
+      // 创建缓存表达式节点
       const cacheExp = createCacheExpression(
         context.cached.length,
         exp,
         isVNode,
         inVOnce,
       )
+      // 存储所有缓存的表达式节点
       context.cached.push(cacheExp)
       return cacheExp
     },
@@ -483,10 +546,17 @@ export function traverseNode(
   }
 }
 
+/**
+ * 创建结构指令转换器
+ * @param name
+ * @param fn
+ * @returns
+ */
 export function createStructuralDirectiveTransform(
   name: string | RegExp,
   fn: StructuralDirectiveTransform,
 ): NodeTransform {
+  // 根据指令名称类型，生成对应的匹配函数
   const matches = isString(name)
     ? (n: string) => n === name
     : (n: string) => name.test(n)
@@ -497,17 +567,23 @@ export function createStructuralDirectiveTransform(
       // structural directive transforms are not concerned with slots
       // as they are handled separately in vSlot.ts
       if (node.tagType === ElementTypes.TEMPLATE && props.some(isVSlot)) {
+        // 跳过包含 v-slot 指令的模板元素（因为 v-slot 有专门的处理逻辑
         return
       }
       const exitFns = []
+      // 遍历节点的所有属性
       for (let i = 0; i < props.length; i++) {
         const prop = props[i]
+
+        // 如果属性是指令且指令名称匹配
         if (prop.type === NodeTypes.DIRECTIVE && matches(prop.name)) {
           // structural directives are removed to avoid infinite recursion
           // also we remove them *before* applying so that it can further
           // traverse itself in case it moves the node around
+          // 从属性列表中移除匹配的指令，避免无限递归
           props.splice(i, 1)
           i--
+          // 调用传入的转换函数 fn 处理指令
           const onExit = fn(node, prop, context)
           if (onExit) exitFns.push(onExit)
         }

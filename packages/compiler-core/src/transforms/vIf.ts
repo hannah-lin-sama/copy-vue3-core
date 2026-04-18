@@ -41,6 +41,9 @@ import {
 } from '../utils'
 import { PatchFlags } from '@vue/shared'
 
+/**
+ * 处理 v-if、v-else 和 v-else-if 指令
+ */
 export const transformIf: NodeTransform = createStructuralDirectiveTransform(
   /^(?:if|else|else-if)$/,
   (node, dir, context) => {
@@ -82,6 +85,14 @@ export const transformIf: NodeTransform = createStructuralDirectiveTransform(
 )
 
 // target-agnostic transform used for both Client and SSR
+/**
+ * 将条件渲染指令转换为对应的 AST 节点结构
+ * @param node 当前处理的元素节点
+ * @param dir 指令节点，包含 v-if、v-else 或 v-else-if 指令
+ * @param context
+ * @param processCodegen 可选的代码生成处理函数
+ * @returns
+ */
 export function processIf(
   node: ElementNode,
   dir: DirectiveNode,
@@ -92,6 +103,7 @@ export function processIf(
     isRoot: boolean,
   ) => (() => void) | undefined,
 ): (() => void) | undefined {
+  // 对于 v-if 和 v-else-if 指令，检查是否有表达式
   if (
     dir.name !== 'else' &&
     (!dir.exp || !(dir.exp as SimpleExpressionNode).content.trim())
@@ -103,48 +115,62 @@ export function processIf(
     dir.exp = createSimpleExpression(`true`, false, loc)
   }
 
+  // 非浏览器环境：处理表达式，添加标识符前缀
   if (!__BROWSER__ && context.prefixIdentifiers && dir.exp) {
     // dir.exp can only be simple expression because vIf transform is applied
     // before expression transform.
     dir.exp = processExpression(dir.exp as SimpleExpressionNode, context)
   }
 
+  // 浏览器环境：验证表达式在浏览器中的有效性
   if (__DEV__ && __BROWSER__ && dir.exp) {
     validateBrowserExpression(dir.exp as SimpleExpressionNode, context)
   }
 
+  // v-if 指令处理
   if (dir.name === 'if') {
+    // 创建 IfBranchNode 表示 v-if 分支
     const branch = createIfBranch(node, dir)
+    // 创建 IfNode 表示整个条件结构
     const ifNode: IfNode = {
       type: NodeTypes.IF,
       loc: cloneLoc(node.loc),
       branches: [branch],
     }
+    // 用 IfNode 替换原始元素节点
     context.replaceNode(ifNode)
+    // 果提供了 processCodegen 函数，调用它处理代码生成
     if (processCodegen) {
       return processCodegen(ifNode, branch, true)
     }
   } else {
     // locate the adjacent v-if
-    const siblings = context.parent!.children
-    const comments = []
-    let i = siblings.indexOf(node)
+    // v-else 和 v-else-if 指令处理
+    const siblings = context.parent!.children // 获取当前节点的父节点的所有子节点（兄弟节点数组）
+    const comments = [] // 创建一个空数组，用于收集遍历过程中遇到的注释节点
+    let i = siblings.indexOf(node) // 获取当前节点在兄弟节点数组中的索引位置
+
+    // 向前遍历兄弟节点的循环，主要用于寻找相邻的 v-if 节点并处理中间的注释。
     while (i-- >= -1) {
       const sibling = siblings[i]
+      // 注释或空白文本
       if (sibling && isCommentOrWhitespace(sibling)) {
-        context.removeNode(sibling)
+        context.removeNode(sibling) // 移除注释或空白文本节点
         if (__DEV__ && sibling.type === NodeTypes.COMMENT) {
-          comments.unshift(sibling)
+          comments.unshift(sibling) // 添加注释节点到数组开头
         }
         continue
       }
 
       if (sibling && sibling.type === NodeTypes.IF) {
         // Check if v-else was followed by v-else-if or there are two adjacent v-else
+        // 检查当前处理的指令是否为 v-else-if 或 v-else
         if (
           (dir.name === 'else-if' || dir.name === 'else') &&
+          // 当 condition 为 undefined 时，表示该分支是 v-else 分支
           sibling.branches[sibling.branches.length - 1].condition === undefined
         ) {
+          // 报错提示 v-else 没有相邻的 v-if
           context.onError(
             createCompilerError(ErrorCodes.X_V_ELSE_NO_ADJACENT_IF, node.loc),
           )

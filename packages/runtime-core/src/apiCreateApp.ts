@@ -486,9 +486,10 @@ export function createAppAPI<HostElement>(
       },
 
       runWithContext(fn) {
-        const lastApp = currentApp
-        currentApp = app
+        const lastApp = currentApp // 暂存之前的活跃应用实例（避免覆盖）
+        currentApp = app // 将当前应用实例设为「活跃上下文」
         try {
+          // 执行目标函数（此时 fn 执行在当前应用的上下文里）
           return fn()
         } finally {
           currentApp = lastApp

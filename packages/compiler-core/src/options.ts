@@ -113,45 +113,55 @@ export type HoistTransform = (
 export enum BindingTypes {
   /**
    * returned from data()
+   * 从 data() 函数返回的变量
    */
   DATA = 'data',
   /**
    * declared as a prop
+   * 作为组件的属性声明的变量
    */
   PROPS = 'props',
   /**
    * a local alias of a `<script setup>` destructured prop.
    * the original is stored in __propsAliases of the bindingMetadata object.
+   * script setup 函数中解构赋值的属性别名
    */
   PROPS_ALIASED = 'props-aliased',
   /**
    * a let binding (may or may not be a ref)
+   * 使用 let 声明的绑定
    */
   SETUP_LET = 'setup-let',
   /**
    * a const binding that can never be a ref.
    * these bindings don't need `unref()` calls when processed in inlined
    * template expressions.
+   * 永远不会是 ref 的 const 绑定
    */
   SETUP_CONST = 'setup-const',
   /**
    * a const binding that does not need `unref()`, but may be mutated.
+   * 不需要 unref() 但可能被修改的 const 绑定
    */
   SETUP_REACTIVE_CONST = 'setup-reactive-const',
   /**
    * a const binding that may be a ref.
+   * 可能是 ref 的 const 绑定
    */
   SETUP_MAYBE_REF = 'setup-maybe-ref',
   /**
    * bindings that are guaranteed to be refs
+   * 保证是 ref 的绑定
    */
   SETUP_REF = 'setup-ref',
   /**
    * declared by other options, e.g. computed, inject
+   * 通过其他选项声明的绑定
    */
   OPTIONS = 'options',
   /**
    * a literal constant, e.g. 'foo', 1, true
+   * 字面量常量
    */
   LITERAL_CONST = 'literal-const',
 }
