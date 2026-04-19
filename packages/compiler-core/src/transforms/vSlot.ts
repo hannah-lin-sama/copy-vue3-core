@@ -38,6 +38,8 @@ import { SlotFlags, slotFlagsText } from '@vue/shared'
 
 const defaultFallback = createSimpleExpression(`undefined`, false)
 
+// 用于跟踪和管理插槽作用域
+// 负责在编译过程中记录插槽作用域的开始和结束，并管理插槽作用域内的变量标识符。
 // A NodeTransform that:
 // 1. Tracks scope identifiers for scoped slots so that they don't get prefixed
 //    by transformExpression. This is only applied in non-browser builds with
@@ -46,6 +48,7 @@ const defaultFallback = createSimpleExpression(`undefined`, false)
 //    Note the exit callback is executed before buildSlots() on the same node,
 //    so only nested slots see positive numbers.
 export const trackSlotScopes: NodeTransform = (node, context) => {
+  // 只处理元素节点，并且是组件或模板元素
   if (
     node.type === NodeTypes.ELEMENT &&
     (node.tagType === ElementTypes.COMPONENT ||
@@ -54,17 +57,22 @@ export const trackSlotScopes: NodeTransform = (node, context) => {
     // We are only checking non-empty v-slot here
     // since we only care about slots that introduce scope variables.
     const vSlot = findDir(node, 'slot')
+    // 只处理包含 v-slot 指令的节点
     if (vSlot) {
+      // 获取插槽的属性表达式（v-slot 的值）
       const slotProps = vSlot.exp
+
+      // 在非浏览器环境且需要前缀标识符时，将插槽属性中的标识符添加到上下文中
       if (!__BROWSER__ && context.prefixIdentifiers) {
         slotProps && context.addIdentifiers(slotProps)
       }
-      context.scopes.vSlot++
+      context.scopes.vSlot++ // 进入了一个新的插槽作用域
       return () => {
+        // 移除之前添加的插槽属性标识符
         if (!__BROWSER__ && context.prefixIdentifiers) {
           slotProps && context.removeIdentifiers(slotProps)
         }
-        context.scopes.vSlot--
+        context.scopes.vSlot-- // 示离开插槽作用域
       }
     }
   }

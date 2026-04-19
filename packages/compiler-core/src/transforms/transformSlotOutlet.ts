@@ -15,17 +15,26 @@ import { RENDER_SLOT } from '../runtimeHelpers'
 import { camelize } from '@vue/shared'
 import { processExpression } from './transformExpression'
 
+/**
+ * 处理插槽出口节点
+ * @param node 节点
+ * @param context 上下文
+ */
 export const transformSlotOutlet: NodeTransform = (node, context) => {
   if (isSlotOutlet(node)) {
     const { children, loc } = node
+
+    // 插槽名称、插槽属性
     const { slotName, slotProps } = processSlotOutlet(node, context)
 
+    // 插槽出口调用参数
     const slotArgs: CallExpression['arguments'] = [
+      // $slots 对象：用于访问插槽内容
       context.prefixIdentifiers ? `_ctx.$slots` : `$slots`,
       slotName,
-      '{}',
-      'undefined',
-      'true',
+      '{}', // 插槽属性
+      'undefined', // 默认插槽内容
+      'true', //作用域ID
     ]
     let expectedLen = 2
 
@@ -42,6 +51,7 @@ export const transformSlotOutlet: NodeTransform = (node, context) => {
     if (context.scopeId && !context.slotted) {
       expectedLen = 5
     }
+    // 移除未使用的参数，只保留需要的参数
     slotArgs.splice(expectedLen) // remove unused arguments
 
     node.codegenNode = createCallExpression(

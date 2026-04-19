@@ -65,20 +65,26 @@ export type ContextualRenderFn = {
 
 /**
  * Wrap a slot function to memoize current rendering instance
+ * 为函数（特别是插槽函数）添加组件上下文，确保它们在执行时能够访问到正确的组件实例。
  * @private compiler helper
  */
 export function withCtx(
-  fn: Function,
+  fn: Function, // 要包装的函数，通常是插槽渲染函数
+  // 组件内部实例，默认为当前渲染实例
   ctx: ComponentInternalInstance | null = currentRenderingInstance,
+  // 仅兼容模式使用，用于区分作用域插槽和非作用域插槽
   isNonScopedSlot?: boolean, // __COMPAT__ only
 ): Function {
+  // 如果没有上下文，直接返回原函数
   if (!ctx) return fn
 
   // already normalized
+  // 如果函数已经被标准化（有 _n 标记），直接返回，避免重复包装
   if ((fn as ContextualRenderFn)._n) {
     return fn
   }
 
+  // 创建带上下文的渲染函数
   const renderFnWithContext: ContextualRenderFn = (...args: any[]) => {
     // If a user calls a compiled slot inside a template expression (#1745), it
     // can mess up block tracking, so by default we disable block tracking and
@@ -86,6 +92,7 @@ export function withCtx(
     // This isn't necessary if rendering a compiled `<slot>`, so we flip the
     // ._d flag off when invoking the wrapped fn inside `renderSlot`.
     if (renderFnWithContext._d) {
+      // 如果函数有 _d 标记（默认禁用块跟踪），则临时禁用块跟踪
       setBlockTracking(-1)
     }
     const prevInstance = setCurrentRenderingInstance(ctx)
@@ -103,16 +110,20 @@ export function withCtx(
       devtoolsComponentUpdated(ctx)
     }
 
+    // 返回原函数的执行结果
     return res
   }
 
   // mark normalized to avoid duplicated wrapping
+  // 标记为已标准化，避免重复包装
   renderFnWithContext._n = true
   // mark this as compiled by default
   // this is used in vnode.ts -> normalizeChildren() to set the slot
   // rendering flag.
+  // 标记为已编译
   renderFnWithContext._c = true
   // disable block tracking by default
+  // 默认禁用块跟踪
   renderFnWithContext._d = true
   // compat build only flag to distinguish scoped slots from non-scoped ones
   if (__COMPAT__ && isNonScopedSlot) {
