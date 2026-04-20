@@ -33,12 +33,13 @@ export function getBaseTransformPreset(
   prefixIdentifiers?: boolean,
 ): TransformPreset {
   return [
+    // 基础转换器
     [
-      transformVBindShorthand,
-      transformOnce,
-      transformIf,
-      transformMemo,
-      transformFor,
+      transformVBindShorthand, // 处理 v-bind 的简写形式（如 :prop）
+      transformOnce, // 处理 v-once 指令
+      transformIf, // 处理 v-if 指令
+      transformMemo, // 处理 v-memo 指令
+      transformFor, // 处理 v-for 指令
       ...(__COMPAT__ ? [transformFilter] : []),
       ...(!__BROWSER__ && prefixIdentifiers
         ? [
@@ -49,15 +50,16 @@ export function getBaseTransformPreset(
         : __BROWSER__ && __DEV__
           ? [transformExpression]
           : []),
-      transformSlotOutlet,
-      transformElement,
-      trackSlotScopes,
-      transformText,
+      transformSlotOutlet, // 处理插槽出口（元素）
+      transformElement, // 处理普通元素
+      trackSlotScopes, // 跟踪插槽作用域
+      transformText, // 处理文本节点
     ],
+    // 指令转换器对象
     {
-      on: transformOn,
-      bind: transformBind,
-      model: transformModel,
+      on: transformOn, // 处理 v-on 指令
+      bind: transformBind, // 处理 v-bind 指令
+      model: transformModel, // 处理 v-model 指令
     },
   ]
 }
@@ -92,7 +94,10 @@ export function baseCompile(
   const resolvedOptions = extend({}, options, {
     prefixIdentifiers,
   })
+  // 解析 HTML 字符串为 AST
   const ast = isString(source) ? baseParse(source, resolvedOptions) : source
+
+  // 获取基础转换器
   const [nodeTransforms, directiveTransforms] =
     getBaseTransformPreset(prefixIdentifiers)
 
@@ -103,13 +108,16 @@ export function baseCompile(
     }
   }
 
+  // 对 AST 进行转换
   transform(
     ast,
     extend({}, resolvedOptions, {
+      // 节点转换器
       nodeTransforms: [
         ...nodeTransforms,
         ...(options.nodeTransforms || []), // user transforms
       ],
+      // 指令转换器
       directiveTransforms: extend(
         {},
         directiveTransforms,
@@ -118,5 +126,6 @@ export function baseCompile(
     }),
   )
 
+  // 生成代码
   return generate(ast, resolvedOptions)
 }

@@ -376,23 +376,25 @@ export function createElementBlock(
  * Create a block root vnode. Takes the same exact arguments as `createVNode`.
  * A block root keeps track of dynamic nodes within the block in the
  * `dynamicChildren` array.
- *
+ * 创建块级虚拟节点（Block VNode）
  * @private
  */
 export function createBlock(
-  type: VNodeTypes | ClassComponent,
-  props?: Record<string, any> | null,
-  children?: any,
-  patchFlag?: number,
-  dynamicProps?: string[],
+  type: VNodeTypes | ClassComponent, // 虚拟节点的类型，可以是标签名、组件等
+  props?: Record<string, any> | null, // 节点的属性对象
+  children?: any, // 节点的子节点
+  patchFlag?: number, // 补丁标志，用于优化更新过程
+  dynamicProps?: string[], // 动态属性数组，指定哪些属性是动态的
 ): VNode {
   return setupBlock(
+    // 创建一个基础虚拟节点
     createVNode(
       type,
       props,
       children,
       patchFlag,
       dynamicProps,
+      // 表示这是一个 block 节点，用于跟踪动态子节点
       true /* isBlock: prevent a block from tracking itself */,
     ),
   )
@@ -466,6 +468,18 @@ const normalizeRef = ({
   ) as any
 }
 
+/**
+ * 创建虚拟节点（VNode）
+ * @param type 虚拟节点的类型，如标签名、组件等
+ * @param props 节点的属性对象
+ * @param children 节点的子节点
+ * @param patchFlag 补丁标志，用于优化更新过程
+ * @param dynamicProps 动态属性数组，指定哪些属性是动态的
+ * @param shapeFlag 形状标志，用于标识节点类型
+ * @param isBlockNode 是否为块级节点
+ * @param needFullChildrenNormalization 是否需要完全标准化子节点
+ * @returns
+ */
 function createBaseVNode(
   type: VNodeTypes | ClassComponent | typeof NULL_DYNAMIC_COMPONENT,
   props: (Data & VNodeProps) | null = null,
@@ -476,34 +490,35 @@ function createBaseVNode(
   isBlockNode = false,
   needFullChildrenNormalization = false,
 ): VNode {
+  // 创建 VNode 对象
   const vnode = {
-    __v_isVNode: true,
-    __v_skip: true,
+    __v_isVNode: true, // 标识这是一个虚拟节点
+    __v_skip: true, // 标识这是一个跳过的节点，不参与更新
     type,
     props,
-    key: props && normalizeKey(props),
-    ref: props && normalizeRef(props),
-    scopeId: currentScopeId,
-    slotScopeIds: null,
+    key: props && normalizeKey(props), // 节点的唯一标识符，用于 diff 操作
+    ref: props && normalizeRef(props), // 节点的 ref 属性，用于访问 DOM 元素
+    scopeId: currentScopeId, // 当前作用域的 ID，用于标识节点所属的作用域
+    slotScopeIds: null, // slot 作用域 ID 数组，用于标识节点所属的 slot 作用域
     children,
-    component: null,
-    suspense: null,
-    ssContent: null,
-    ssFallback: null,
-    dirs: null,
-    transition: null,
-    el: null,
-    anchor: null,
-    target: null,
-    targetStart: null,
-    targetAnchor: null,
-    staticCount: 0,
-    shapeFlag,
-    patchFlag,
-    dynamicProps,
-    dynamicChildren: null,
-    appContext: null,
-    ctx: currentRenderingInstance,
+    component: null, // 组件实例，用于处理组件节点
+    suspense: null, // 挂起节点，用于处理异步组件
+    ssContent: null, // 服务器端渲染内容，用于 hydration
+    ssFallback: null, // 服务器端渲染回退内容，用于 hydration
+    dirs: null, // 指令数组，用于处理指令节点
+    transition: null, // 过渡节点，用于处理过渡效果
+    el: null, // DOM 元素，用于挂载节点
+    anchor: null, // 锚点元素，用于插入节点
+    target: null, // 目标元素，用于插入节点
+    targetStart: null, // 目标元素的起始位置，用于插入节点
+    targetAnchor: null, // 目标元素的锚点位置，用于插入节点
+    staticCount: 0, // 静态子节点的数量，用于优化更新过程
+    shapeFlag, // 形状标志，用于标识节点类型
+    patchFlag, // 补丁标志，用于优化更新过程
+    dynamicProps, // 动态属性数组，指定哪些属性是动态的
+    dynamicChildren: null, // 动态子节点数组，用于处理动态子节点
+    appContext: null, // 应用上下文，用于访问全局状态和配置
+    ctx: currentRenderingInstance, // 当前渲染实例，用于访问渲染上下文
   } as VNode
 
   if (needFullChildrenNormalization) {
@@ -521,6 +536,7 @@ function createBaseVNode(
   }
 
   // validate key
+  // 在开发环境下，检查 key 是否为 NaN
   if (__DEV__ && vnode.key !== vnode.key) {
     warn(`VNode created with invalid key (NaN). VNode type:`, vnode.type)
   }
@@ -529,18 +545,21 @@ function createBaseVNode(
   if (
     isBlockTreeEnabled > 0 &&
     // avoid a block node from tracking itself
-    !isBlockNode &&
+    !isBlockNode && // 当前节点不是块节点
     // has current parent block
-    currentBlock &&
+    currentBlock && // 当前节点有父块
     // presence of a patch flag indicates this node needs patching on updates.
     // component nodes also should always be patched, because even if the
     // component doesn't need to update, it needs to persist the instance on to
     // the next vnode so that it can be properly unmounted later.
+    // 节点有补丁标志或为组件节点
     (vnode.patchFlag > 0 || shapeFlag & ShapeFlags.COMPONENT) &&
     // the EVENTS flag is only for hydration and if it is the only flag, the
     // vnode should not be considered dynamic due to handler caching.
+    // 不是仅需要 hydration 的节点
     vnode.patchFlag !== PatchFlags.NEED_HYDRATION
   ) {
+    // 将节点添加到当前块中
     currentBlock.push(vnode)
   }
 
@@ -798,22 +817,36 @@ export function createCommentVNode(
     : createVNode(Comment, null, text)
 }
 
+/**
+ * 将不同类型的子节点标准化为统一的虚拟节点（VNode）格式
+ * @param child 子节点
+ * @returns
+ */
 export function normalizeVNode(child: VNodeChild): VNode {
+  // 1、如果 child 是 null、undefined 或布尔值，创建一个注释节点作为占位符
   if (child == null || typeof child === 'boolean') {
     // empty placeholder
     return createVNode(Comment)
+
+    // 2、处理数组
   } else if (isArray(child)) {
     // fragment
+    // 如果 child 是数组，创建一个 Fragment 节点
     return createVNode(
       Fragment,
       null,
       // #3666, avoid reference pollution when reusing vnode
       child.slice(),
     )
+
+    // 3、处理已有的 VNode
   } else if (isVNode(child)) {
     // already vnode, this should be the most common since compiled templates
     // always produce all-vnode children arrays
+    // 返回它的克隆（如果已挂载）
     return cloneIfMounted(child)
+
+    // 4、处理其他类型（字符串和数字）
   } else {
     // strings and numbers
     return createVNode(Text, null, String(child))
@@ -828,34 +861,51 @@ export function cloneIfMounted(child: VNode): VNode {
     : cloneVNode(child)
 }
 
+/**
+ * 规范化子节点
+ * @param vnode 节点
+ * @param children 子节点
+ * @returns
+ */
 export function normalizeChildren(vnode: VNode, children: unknown): void {
   let type = 0
   const { shapeFlag } = vnode
+
+  // 1、null 或 undefined：直接设置为 null
   if (children == null) {
     children = null
+
+    // 2、数组：设置子节点类型为 ShapeFlags.ARRAY_CHILDREN
   } else if (isArray(children)) {
     type = ShapeFlags.ARRAY_CHILDREN
+
+    // 3、对象
   } else if (typeof children === 'object') {
+    // 如果 vnode 是元素或 Teleport，处理插槽
     if (shapeFlag & (ShapeFlags.ELEMENT | ShapeFlags.TELEPORT)) {
       // Normalize slot to plain children for plain element and Teleport
-      const slot = (children as any).default
+      const slot = (children as any).default // 提取默认插槽 children.default
       if (slot) {
         // _c marker is added by withCtx() indicating this is a compiled slot
-        slot._c && (slot._d = false)
+        slot._c && (slot._d = false) // 编译标记
+        // 递归调用 normalizeChildren 处理插槽内容
         normalizeChildren(vnode, slot())
-        slot._c && (slot._d = true)
+        slot._c && (slot._d = true) // 动态标记
       }
       return
     } else {
+      // 设置子节点类型为 ShapeFlags.SLOTS_CHILDREN
       type = ShapeFlags.SLOTS_CHILDREN
       const slotFlag = (children as RawSlots)._
       if (!slotFlag && !isInternalObject(children)) {
         // if slots are not normalized, attach context instance
         // (compiled / normalized slots already have context)
+        // 如果插槽未标准化，添加渲染上下文
         ;(children as RawSlots)._ctx = currentRenderingInstance
       } else if (slotFlag === SlotFlags.FORWARDED && currentRenderingInstance) {
         // a child component receives forwarded slots from the parent.
         // its slot type is determined by its parent's slot type.
+        // 如果是转发的插槽，根据父组件的插槽类型设置当前插槽类型
         if (
           (currentRenderingInstance.slots as RawSlots)._ === SlotFlags.STABLE
         ) {
@@ -866,13 +916,19 @@ export function normalizeChildren(vnode: VNode, children: unknown): void {
         }
       }
     }
+
+    // 4、函数
   } else if (isFunction(children)) {
+    // 将函数转换为插槽对象，默认插槽为该函数
     children = { default: children, _ctx: currentRenderingInstance }
     type = ShapeFlags.SLOTS_CHILDREN
+
+    // 5、其他类型子节点
   } else {
     children = String(children)
     // force teleport children to array so it can be moved around
     if (shapeFlag & ShapeFlags.TELEPORT) {
+      // 如果是 Teleport 节点，将文本转换为文本 VNode 并放入数组
       type = ShapeFlags.ARRAY_CHILDREN
       children = [createTextVNode(children as string)]
     } else {

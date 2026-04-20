@@ -68,18 +68,18 @@ export type MergedParserOptions = Omit<
   Pick<ParserOptions, OptionalOptions>
 
 export const defaultParserOptions: MergedParserOptions = {
-  parseMode: 'base',
-  ns: Namespaces.HTML,
-  delimiters: [`{{`, `}}`],
-  getNamespace: () => Namespaces.HTML,
-  isVoidTag: NO,
-  isPreTag: NO,
-  isIgnoreNewlineTag: NO,
-  isCustomElement: NO,
-  onError: defaultOnError,
-  onWarn: defaultOnWarn,
-  comments: __DEV__,
-  prefixIdentifiers: false,
+  parseMode: 'base', // 解析模式，可选值：'base'、'html'、'sfc'
+  ns: Namespaces.HTML, // 默认命名空间，控制解析规则
+  delimiters: [`{{`, `}}`], // 插值表达式的分隔符
+  getNamespace: () => Namespaces.HTML, // 根据标签名获取命名空间的函数
+  isVoidTag: NO, // 判断是否为 void 标签的函数
+  isPreTag: NO, // 判断是否为 pre 标签的函数
+  isIgnoreNewlineTag: NO, // 判断是否为忽略换行的标签的函数
+  isCustomElement: NO, // 判断是否为自定义元素的函数
+  onError: defaultOnError, // 错误处理函数
+  onWarn: defaultOnWarn, // 警告处理函数
+  comments: __DEV__, // 是否保留注释，默认仅在开发环境保留
+  prefixIdentifiers: false, // 是否为标识符添加前缀，默认不添加
 }
 
 let currentOptions: MergedParserOptions = defaultParserOptions
@@ -187,33 +187,53 @@ const tokenizer = new Tokenizer(stack, {
     }
   },
 
+  /**
+   * 处理普通 HTML 属性的名称解析
+   * @param start 属性名称的起始位置
+   * @param end 属性名称的结束位置
+   */
   onattribname(start, end) {
     // plain attribute
     currentProp = {
-      type: NodeTypes.ATTRIBUTE,
-      name: getSlice(start, end),
+      type: NodeTypes.ATTRIBUTE, // 表示这是一个普通 HTML 属性
+      name: getSlice(start, end), // 从输入字符串中提取属性名
+      // 设置属性名的位置信息
       nameLoc: getLoc(start, end),
-      value: undefined,
+      value: undefined, // 初始化属性值为 undefined
+      // 设置整个属性的位置信息
       loc: getLoc(start),
     }
   },
 
+  /**
+   * 用于处理指令名称的解析和处理
+   * @param start 指令名称的起始位置
+   * @param end 指令名称的结束位置
+   */
   ondirname(start, end) {
+    // 从输入字符串中提取原始指令名称
     const raw = getSlice(start, end)
     const name =
       raw === '.' || raw === ':'
-        ? 'bind'
+        ? // . 和 : 简写为 bind 指令
+          'bind'
         : raw === '@'
-          ? 'on'
+          ? // @ 简写为 on 指令
+            'on'
           : raw === '#'
-            ? 'slot'
-            : raw.slice(2)
+            ? // # 简写为 slot 指令
+              'slot'
+            : // 其他情况（如 v-if）则去掉前缀 v- 得到指令名称
+              raw.slice(2)
 
+    // 在非 VPre 模式下，如果指令名称为空，发出错误
     if (!inVPre && name === '') {
       emitError(ErrorCodes.X_MISSING_DIRECTIVE_NAME, start)
     }
 
+    // 在 VPre 模式或指令名称为空时
     if (inVPre || name === '') {
+      // 创建普通属性节点，将指令视为普通 HTML 属性
       currentProp = {
         type: NodeTypes.ATTRIBUTE,
         name: raw,
@@ -221,7 +241,10 @@ const tokenizer = new Tokenizer(stack, {
         value: undefined,
         loc: getLoc(start),
       }
+
+      // 在非 VPre 模式且指令名称非空时
     } else {
+      // 创建指令节点，设置指令名称、原始名称、表达式、参数和修饰符
       currentProp = {
         type: NodeTypes.DIRECTIVE,
         name,
@@ -232,12 +255,16 @@ const tokenizer = new Tokenizer(stack, {
         loc: getLoc(start),
       }
       if (name === 'pre') {
+        // 启用 VPre 模式
         inVPre = tokenizer.inVPre = true
+        // 记录当前 VPre 模式的边界标签
         currentVPreBoundary = currentOpenTag
         // convert dirs before this one to attributes
+        // 获取当前开放标签的属性列表
         const props = currentOpenTag!.props
         for (let i = 0; i < props.length; i++) {
           if (props[i].type === NodeTypes.DIRECTIVE) {
+            // 将指令转换为普通属性
             props[i] = dirToAttr(props[i] as DirectiveNode)
           }
         }
@@ -245,15 +272,32 @@ const tokenizer = new Tokenizer(stack, {
     }
   },
 
+  /**
+   * 处理指令参数的解析和处理
+   * @param start 指令参数的起始位置
+   * @param end 指令参数的结束位置
+   * @returns
+   */
   ondirarg(start, end) {
     if (start === end) return
+
+    // 从输入字符串中提取指令参数的内容
     const arg = getSlice(start, end)
+
+    // 如果在 VPre 模式下，且当前属性不是 v-pre 指令
     if (inVPre && !isVPre(currentProp!)) {
+      // 将参数追加到属性名后面（例如，v-bind:class 变为 v-bind:class）
       ;(currentProp as AttributeNode).name += arg
+      // 更新属性名的位置信息
       setLocEnd((currentProp as AttributeNode).nameLoc, end)
     } else {
+      // 检查参数是否为静态（不以 [ 开头）
       const isStatic = arg[0] !== `[`
+
+      // 创建表达式节点作为指令的参数
       ;(currentProp as DirectiveNode).arg = createExp(
+        // 如果是静态参数（如 class），直接使用参数内容
+        // 如果是动态参数（如 [dynamicArg]），去掉括号后使用内容
         isStatic ? arg : arg.slice(1, -1),
         isStatic,
         getLoc(start, end),
@@ -262,44 +306,91 @@ const tokenizer = new Tokenizer(stack, {
     }
   },
 
+  /**
+   * 处理指令修饰符的解析和处理
+   * @param start 指令修饰符的起始位置
+   * @param end 指令修饰符的结束位置
+   * @returns
+   */
   ondirmodifier(start, end) {
+    // 从输入字符串中提取修饰符的内容
     const mod = getSlice(start, end)
+
+    // 1、Vpre模式
     if (inVPre && !isVPre(currentProp!)) {
+      // 将修饰符追加到属性名后面（例如，v-on:click.stop 变为 v-on:click.stop）
       ;(currentProp as AttributeNode).name += '.' + mod
+      // 更新属性名的位置信息
       setLocEnd((currentProp as AttributeNode).nameLoc, end)
+
+      //2、Slot 指令特殊处理
     } else if ((currentProp as DirectiveNode).name === 'slot') {
       // slot has no modifiers, special case for edge cases like
       // https://github.com/vuejs/language-tools/issues/2710
       const arg = (currentProp as DirectiveNode).arg
       if (arg) {
+        // slot 指令没有修饰符，这是一个特殊处理，用于处理边缘情况
+        // 如果有参数，将修饰符追加到参数内容后面
         ;(arg as SimpleExpressionNode).content += '.' + mod
+        // 更新参数的位置信息
         setLocEnd(arg.loc, end)
       }
     } else {
+      // 创建一个简单表达式节点表示修饰符
       const exp = createSimpleExpression(mod, true, getLoc(start, end))
+      // 将修饰符添加到指令的 modifiers 数组中
       ;(currentProp as DirectiveNode).modifiers.push(exp)
     }
   },
 
+  /**
+   * 处理 HTML 属性值的数据部分
+   * @param start 属性值的起始位置
+   * @param end 属性值的结束位置
+   */
   onattribdata(start, end) {
+    // 从输入字符串中提取属性值的一部分
+    // 将提取的内容追加到 currentAttrValue 变量中
     currentAttrValue += getSlice(start, end)
+
+    // 如果 currentAttrStartIndex 小于 0（表示还没有记录起始位置）
+    // 将其设置为当前数据的起始位置 start
     if (currentAttrStartIndex < 0) currentAttrStartIndex = start
-    currentAttrEndIndex = end
+    currentAttrEndIndex = end // 更新属性值的结束位置
   },
 
+  /**
+   * 处理 HTML 属性值中的实体引用（entity references）
+   * @param char 实体引用解码后的字符（如 &amp; 解码为 &）
+   * @param start 实体引用的起始位置
+   * @param end 实体引用的结束位置
+   */
   onattribentity(char, start, end) {
+    // 将解码后的字符追加到当前属性值中
     currentAttrValue += char
+    // 如果 currentAttrStartIndex 小于 0（表示还没有记录起始位置）
+    // 将其设置为当前数据的起始位置 start
     if (currentAttrStartIndex < 0) currentAttrStartIndex = start
-    currentAttrEndIndex = end
+    currentAttrEndIndex = end // 更新属性值的结束位置
   },
 
+  /**
+   * 用于处理属性名解析结束时的逻辑
+   * @param end 属性名的结束位置
+   */
   onattribnameend(end) {
+    // 获取当前属性的起始位置
     const start = currentProp!.loc.start.offset
+    // 从输入字符串中提取完整的属性名
     const name = getSlice(start, end)
+
     if (currentProp!.type === NodeTypes.DIRECTIVE) {
+      // 置指令的 rawName 属性为完整的属性名
       currentProp!.rawName = name
     }
     // check duplicate attrs
+    // 检查当前开放标签的属性列表中是否已存在相同名称的属性
+    // 编译器的重复属性检测逻辑是基于 rawName 进行比较的
     if (
       currentOpenTag!.props.some(
         p => (p.type === NodeTypes.DIRECTIVE ? p.rawName : p.name) === name,
@@ -309,6 +400,11 @@ const tokenizer = new Tokenizer(stack, {
     }
   },
 
+  /**
+   *
+   * @param quote
+   * @param end
+   */
   onattribend(quote, end) {
     if (currentOpenTag && currentProp) {
       // finalize end pos
@@ -409,7 +505,13 @@ const tokenizer = new Tokenizer(stack, {
     currentAttrStartIndex = currentAttrEndIndex = -1
   },
 
+  /**
+   * 处理 HTML 注释的解析
+   * @param start 注释的起始索引
+   * @param end 注释的结束索引
+   */
   oncomment(start, end) {
+    // 配置保留注释节点
     if (currentOptions.comments) {
       addNode({
         type: NodeTypes.COMMENT,
@@ -419,6 +521,9 @@ const tokenizer = new Tokenizer(stack, {
     }
   },
 
+  /**
+   *
+   */
   onend() {
     const end = currentInput.length
     // EOF ERRORS
@@ -469,9 +574,19 @@ const tokenizer = new Tokenizer(stack, {
     }
   },
 
+  /**
+   * 用于处理 CDATA 部分的解析。
+   * CDATA（Character Data）是一种在 XML 和 HTML 中用于包含不应被解析器解析的原始文本的方法。
+   * @param start
+   * @param end
+   */
   oncdata(start, end) {
+    // 1、处理非 HTML 命名空间
     if (stack[0].ns !== Namespaces.HTML) {
+      // 调用 onText 函数处理 CDATA 内容
       onText(getSlice(start, end), start, end)
+
+      // 2、处理 HTML 命名空间
     } else {
       emitError(ErrorCodes.CDATA_IN_HTML_CONTENT, start - 9)
     }
@@ -591,10 +706,18 @@ function endOpenTag(end: number) {
   currentOpenTag = null
 }
 
+/**
+ * 处理 HTML 文本内容的解析和添加
+ * @param content
+ * @param start
+ * @param end
+ */
 function onText(content: string, start: number, end: number) {
   if (__BROWSER__) {
     const tag = stack[0] && stack[0].tag
+    // 检查当前标签是否不是 script 或 style 标签，且文本内容包含实体字符
     if (tag !== 'script' && tag !== 'style' && content.includes('&')) {
+      // 解码实体字符
       content = currentOptions.decodeEntities!(content, false)
     }
   }
@@ -932,10 +1055,15 @@ function setLocEnd(loc: SourceLocation, end: number) {
   loc.source = getSlice(loc.start.offset, end)
 }
 
+/**
+ * 将指令节点（DirectiveNode）转换为普通属性节点（AttributeNode）
+ * @param dir
+ * @returns
+ */
 function dirToAttr(dir: DirectiveNode): AttributeNode {
   const attr: AttributeNode = {
     type: NodeTypes.ATTRIBUTE,
-    name: dir.rawName!,
+    name: dir.rawName!, // 使用指令的原始名称作为属性名
     nameLoc: getLoc(
       dir.loc.start.offset,
       dir.loc.start.offset + dir.rawName!.length,
@@ -943,8 +1071,11 @@ function dirToAttr(dir: DirectiveNode): AttributeNode {
     value: undefined,
     loc: dir.loc,
   }
+
+  // 处理指令表达式
   if (dir.exp) {
     // account for quotes
+    // 调整表达式的位置信息，考虑引号的影响
     const loc = dir.exp.loc
     if (loc.end.offset < dir.loc.end.offset) {
       loc.start.offset--
@@ -952,6 +1083,7 @@ function dirToAttr(dir: DirectiveNode): AttributeNode {
       loc.end.offset++
       loc.end.column++
     }
+    // 创建文本节点作为属性值，内容为表达式的内容
     attr.value = {
       type: NodeTypes.TEXT,
       content: (dir.exp as SimpleExpressionNode).content,
@@ -1025,8 +1157,14 @@ function reset() {
   stack.length = 0
 }
 
+/**
+ * 解析 HTML 字符串为 AST
+ * @param input 要解析的 HTML 字符串
+ * @param options 解析选项
+ * @returns AST 节点
+ */
 export function baseParse(input: string, options?: ParserOptions): RootNode {
-  reset()
+  reset() // 重置解析器的内部状态，确保每次解析都是从干净的状态开始
   currentInput = input
   currentOptions = extend({}, defaultParserOptions)
 
@@ -1035,6 +1173,7 @@ export function baseParse(input: string, options?: ParserOptions): RootNode {
     for (key in options) {
       if (options[key] != null) {
         // @ts-expect-error
+        // 应用用户提供的选项，覆盖默认值
         currentOptions[key] = options[key]
       }
     }
@@ -1042,17 +1181,20 @@ export function baseParse(input: string, options?: ParserOptions): RootNode {
 
   if (__DEV__) {
     if (!__BROWSER__ && currentOptions.decodeEntities) {
+      // 在非浏览器环境中，decodeEntities 选项会被忽略
       console.warn(
         `[@vue/compiler-core] decodeEntities option is passed but will be ` +
           `ignored in non-browser builds.`,
       )
     } else if (__BROWSER__ && !__TEST__ && !currentOptions.decodeEntities) {
+      // 在浏览器环境中，decodeEntities 选项是必需的
       throw new Error(
         `[@vue/compiler-core] decodeEntities option is required in browser builds.`,
       )
     }
   }
 
+  // 设置词法分析器的解析模式（HTML、SFC 或 BASE
   tokenizer.mode =
     currentOptions.parseMode === 'html'
       ? ParseMode.HTML
@@ -1060,20 +1202,27 @@ export function baseParse(input: string, options?: ParserOptions): RootNode {
         ? ParseMode.SFC
         : ParseMode.BASE
 
+  // 设置是否在 XML 模式下解析（SVG 或 MathML 命名空间）
   tokenizer.inXML =
     currentOptions.ns === Namespaces.SVG ||
     currentOptions.ns === Namespaces.MATH_ML
 
+  // 配置自定义分隔符（如果提供）
   const delimiters = options && options.delimiters
   if (delimiters) {
     tokenizer.delimiterOpen = toCharCodes(delimiters[0])
     tokenizer.delimiterClose = toCharCodes(delimiters[1])
   }
 
+  // 创建根节点并存储为当前根节点
   const root = (currentRoot = createRoot([], input))
+
+  // 调用词法分析器解析输入字符串，生成 AST
   tokenizer.parse(currentInput)
-  root.loc = getLoc(0, input.length)
+  root.loc = getLoc(0, input.length) // 设置根节点的位置信息
+
+  // 处理根节点子节点中的空白字符，优化 AST 结构
   root.children = condenseWhitespace(root.children)
-  currentRoot = null
+  currentRoot = null // 清理当前根节点引用
   return root
 }

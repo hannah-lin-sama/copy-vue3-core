@@ -175,18 +175,18 @@ export function compileTemplate(
 }
 
 /**
- *
+ * 负责把 <template> 编译成可执行的 render 函数
  * @param param0
  * @returns
  */
 function doCompileTemplate({
   filename,
   id,
-  scoped,
-  slotted,
+  scoped, // 标记是否使用作用域样式
+  slotted, // 标记是否使用插槽
   inMap,
   source,
-  ast: inAST,
+  ast: inAST, // 输入的 AST 节点
   ssr = false,
   ssrCssVars,
   isProd = false,
@@ -194,9 +194,12 @@ function doCompileTemplate({
   compilerOptions = {},
   transformAssetUrls,
 }: SFCTemplateCompileOptions): SFCTemplateCompileResults {
+  // 收集错误语法
   const errors: CompilerError[] = []
+  // 收集格式错误
   const warnings: CompilerError[] = []
 
+  // 静态资源替换
   let nodeTransforms: NodeTransform[] = []
   if (isObject(transformAssetUrls)) {
     const assetOptions = normalizeOptions(transformAssetUrls)
@@ -208,6 +211,7 @@ function doCompileTemplate({
     nodeTransforms = [transformAssetUrl, transformSrcset]
   }
 
+  // Vue3 编译强制要求 id，用于 scoped css 的 data-v-id
   if (ssr && !ssrCssVars) {
     warnOnce(
       `compileTemplate is called with \`ssr: true\` but no ` +
@@ -219,9 +223,12 @@ function doCompileTemplate({
     id = ''
   }
 
+  // 生成 scoped ID
   const shortId = id.replace(/^data-v-/, '')
   const longId = `data-v-${shortId}`
 
+  // 浏览器端：CompilerDOM（生成 dom 渲染代码）
+  // 服务端：CompilerSSR（生成服务端串化逻辑）
   const defaultCompiler = ssr ? (CompilerSSR as TemplateCompiler) : CompilerDOM
   compiler = compiler || defaultCompiler
 
@@ -235,34 +242,39 @@ function doCompileTemplate({
     // If input AST has already been transformed, then it cannot be reused.
     // We need to parse a fresh one. Can't just use `source` here since we need
     // the AST location info to be relative to the entire SFC.
+    // AST 被修改过 → 必须重新解析，不能复用
     const newAST = (ssr ? CompilerDOM : compiler).parse(inAST.source, {
-      prefixIdentifiers: true,
+      prefixIdentifiers: true, // 为标识符添加前缀，避免与 Vue 内部标识符冲突
       ...compilerOptions,
-      parseMode: 'sfc',
+      parseMode: 'sfc', // 解析模式为 SFC 模式
       onError: e => errors.push(e),
     })
+    // 从新解析的 AST 中提取模板节点
     const template = newAST.children.find(
       node => node.type === NodeTypes.ELEMENT && node.tag === 'template',
     ) as ElementNode
+
+    // 创建新的根节点，将模板节点的子节点作为根节点的子节点
     inAST = createRoot(template.children, inAST.source)
   }
 
+  // 模板 → AST 转换 → 代码生成
   let { code, ast, preamble, map } = compiler.compile(inAST || source, {
     mode: 'module',
     prefixIdentifiers: true,
-    hoistStatic: true,
-    cacheHandlers: true,
+    hoistStatic: true, // 提取静态属性
+    cacheHandlers: true, // 缓存处理函数
     ssrCssVars:
       ssr && ssrCssVars && ssrCssVars.length
         ? genCssVarsFromList(ssrCssVars, shortId, isProd, true)
         : '',
-    scopeId: scoped ? longId : undefined,
-    slotted,
-    sourceMap: true,
+    scopeId: scoped ? longId : undefined, // 作用域 ID
+    slotted, // 是否为插槽
+    sourceMap: true, // 生成源映射
     ...compilerOptions,
-    hmr: !isProd,
+    hmr: !isProd, // 是否开启 HMR
     nodeTransforms: nodeTransforms.concat(compilerOptions.nodeTransforms || []),
-    filename,
+    filename, // 文件名
     onError: e => errors.push(e),
     onWarn: w => warnings.push(w),
   })
@@ -270,6 +282,7 @@ function doCompileTemplate({
   // inMap should be the map produced by ./parse.ts which is a simple line-only
   // mapping. If it is present, we need to adjust the final map and errors to
   // reflect the original line numbers.
+  // 保证报错行号、浏览器调试能对应到 原始 .vue 文件
   if (inMap && !inAST) {
     if (map) {
       map = mapLines(inMap, map)

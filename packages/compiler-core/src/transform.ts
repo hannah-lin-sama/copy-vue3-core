@@ -62,9 +62,13 @@ export type DirectiveTransform = (
   augmentor?: (ret: DirectiveTransformResult) => DirectiveTransformResult,
 ) => DirectiveTransformResult
 
+// 指令转换的结果
 export interface DirectiveTransformResult {
+  // 存储指令转换后生成的属性数组
   props: Property[]
+  // 表示指令是否需要运行时支持
   needRuntime?: boolean | symbol
+  // 用于服务端渲染（SSR），存储生成的标签部分
   ssrTagParts?: TemplateLiteral['elements']
 }
 
@@ -77,7 +81,9 @@ export type StructuralDirectiveTransform = (
 ) => void | (() => void)
 
 export interface ImportItem {
+  // 表示导入表达式，即 import 语句中 import 关键字后面的部分
   exp: string | ExpressionNode
+  // 表示模块路径，即 import 语句中 from 关键字后面的部分
   path: string
 }
 
@@ -392,24 +398,40 @@ export function createTransformContext(
   return context
 }
 
+/**
+ * 对模板的抽象语法树（AST）进行转换和优化
+ * @param root
+ * @param options
+ */
 export function transform(root: RootNode, options: TransformOptions): void {
+  // 创建转换上下文
   const context = createTransformContext(root, options)
+
+  // 递归遍历 AST 树，对每个节点应用注册的转换器
+  // 处理指令、表达式、组件等各种节点
   traverseNode(root, context)
+
+  // 启用了静态提升（hoistStatic 选项为 true），则调用 cacheStatic 函数优化静态内容
+  // 将静态节点提升到渲染函数外部，减少重复渲染的开销。
   if (options.hoistStatic) {
     cacheStatic(root, context)
   }
+
+  // 生成根节点代码
   if (!options.ssr) {
     createRootCodegen(root, context)
   }
+
+  // 收集元信息
   // finalize meta information
-  root.helpers = new Set([...context.helpers.keys()])
-  root.components = [...context.components]
-  root.directives = [...context.directives]
-  root.imports = context.imports
-  root.hoists = context.hoists
-  root.temps = context.temps
-  root.cached = context.cached
-  root.transformed = true
+  root.helpers = new Set([...context.helpers.keys()]) // 辅助函数
+  root.components = [...context.components] // 组件
+  root.directives = [...context.directives] // 指令
+  root.imports = context.imports // 导入
+  root.hoists = context.hoists // 提升的静态内容
+  root.temps = context.temps //临时变量
+  root.cached = context.cached // 缓存的节点
+  root.transformed = true // 标记已转换
 
   if (__COMPAT__) {
     root.filters = [...context.filters!]
@@ -464,6 +486,11 @@ function createRootCodegen(root: RootNode, context: TransformContext) {
   }
 }
 
+/**
+ * 遍历父节点的子节点并为每个子节点设置正确的上下文信息遍历父节点的子节点并为每个子节点设置正确的上下文信息
+ * @param parent 父节点
+ * @param context
+ */
 export function traverseChildren(
   parent: ParentNode,
   context: TransformContext,
@@ -472,26 +499,43 @@ export function traverseChildren(
   const nodeRemoved = () => {
     i--
   }
+  // 使用 for 循环遍历父节点的所有子节点
   for (; i < parent.children.length; i++) {
     const child = parent.children[i]
+    // 跳过字符串类型的子节点（如文本节点）
     if (isString(child)) continue
+    // 保存当前父节点为祖父节点
     context.grandParent = context.parent
+    // 设置当前父节点
     context.parent = parent
+    // 设置当前子节点索引
     context.childIndex = i
+    // 设置节点移除回调
     context.onNodeRemoved = nodeRemoved
+    // 递归遍历子节点
     traverseNode(child, context)
   }
 }
 
+/**
+ * 遍历 AST 节点并应用转换插件。
+ * 它是编译器转换阶段的关键部分，负责处理模板的各种节点类型，并执行相应的转换逻辑。
+ * @param node 要遍历的 AST 节点，可以是根节点或模板子节点
+ * @param context
+ * @returns
+ */
 export function traverseNode(
   node: RootNode | TemplateChildNode,
   context: TransformContext,
 ): void {
+  // 将 context.currentNode 设置为当前节点
   context.currentNode = node
   // apply transform plugins
+  // 从上下文获取 nodeTransforms 数组
   const { nodeTransforms } = context
   const exitFns = []
   for (let i = 0; i < nodeTransforms.length; i++) {
+    // 遍历并应用每个转换插件，收集返回的退出函数
     const onExit = nodeTransforms[i](node, context)
     if (onExit) {
       if (isArray(onExit)) {
@@ -505,11 +549,13 @@ export function traverseNode(
       return
     } else {
       // node may have been replaced
+      // 节点被替换，更新 node 变量
       node = context.currentNode
     }
   }
 
   switch (node.type) {
+    // 注释节点：在非 SSR 模式下，注入 CREATE_COMMENT 辅助函数
     case NodeTypes.COMMENT:
       if (!context.ssr) {
         // inject import for the Comment symbol, which is needed for creating
@@ -517,6 +563,7 @@ export function traverseNode(
         context.helper(CREATE_COMMENT)
       }
       break
+    // 插值节点：在非 SSR 模式下，注入 TO_DISPLAY_STRING 辅助函数
     case NodeTypes.INTERPOLATION:
       // no need to traverse, but we need to inject toString helper
       if (!context.ssr) {
@@ -525,11 +572,13 @@ export function traverseNode(
       break
 
     // for container types, further traverse downwards
+    // 条件节点：遍历所有分支
     case NodeTypes.IF:
       for (let i = 0; i < node.branches.length; i++) {
         traverseNode(node.branches[i], context)
       }
       break
+    // 容器类型节点：调用 traverseChildren 遍历子节点
     case NodeTypes.IF_BRANCH:
     case NodeTypes.FOR:
     case NodeTypes.ELEMENT:
@@ -542,6 +591,7 @@ export function traverseNode(
   context.currentNode = node
   let i = exitFns.length
   while (i--) {
+    // 按照相反的顺序执行收集到的退出函数
     exitFns[i]()
   }
 }

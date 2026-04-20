@@ -371,6 +371,17 @@ function resolveSetupReference(name: string, context: TransformContext) {
 
 export type PropsExpression = ObjectExpression | CallExpression | ExpressionNode
 
+/**
+ * 构建元素的属性表达式。
+ * 它处理元素的静态属性和指令，生成对应的属性表达式，并分析补丁标志，为虚拟 DOM 的更新提供优化信息。
+ * @param node 要处理的元素节点
+ * @param context
+ * @param props 元素的属性数组
+ * @param isComponent 是否为组件
+ * @param isDynamicComponent 是否为动态组件
+ * @param ssr
+ * @returns
+ */
 export function buildProps(
   node: ElementNode,
   context: TransformContext,
@@ -379,16 +390,16 @@ export function buildProps(
   isDynamicComponent: boolean,
   ssr = false,
 ): {
-  props: PropsExpression | undefined
-  directives: DirectiveNode[]
-  patchFlag: number
-  dynamicPropNames: string[]
-  shouldUseBlock: boolean
+  props: PropsExpression | undefined // 生成的属性表达式
+  directives: DirectiveNode[] // 需要运行时处理的指令
+  patchFlag: number // 补丁标志，用于虚拟 DOM 更新优化
+  dynamicPropNames: string[] // 动态属性名称数组
+  shouldUseBlock: boolean // 是否应该使用块
 } {
   const { tag, loc: elementLoc, children } = node
-  let properties: ObjectExpression['properties'] = []
-  const mergeArgs: PropsExpression[] = []
-  const runtimeDirectives: DirectiveNode[] = []
+  let properties: ObjectExpression['properties'] = [] // 属性对象的属性数组
+  const mergeArgs: PropsExpression[] = [] // 用于合并属性的参数数组
+  const runtimeDirectives: DirectiveNode[] = [] // 需要运行时处理的指令
   const hasChildren = children.length > 0
   let shouldUseBlock = false
 
@@ -485,9 +496,11 @@ export function buildProps(
     }
   }
 
+  // 遍历处理属性
   for (let i = 0; i < props.length; i++) {
     // static attribute
     const prop = props[i]
+    // 1、处理静态属性
     if (prop.type === NodeTypes.ATTRIBUTE) {
       const { loc, name, nameLoc, value } = prop
       let isStatic = true
@@ -538,6 +551,7 @@ export function buildProps(
         ),
       )
     } else {
+      // 2、处理指令
       // directives
       const { name, arg, exp, loc, modifiers } = prop
       const isVBind = name === 'bind'
@@ -698,6 +712,7 @@ export function buildProps(
     }
   }
 
+  // 构建属性表达式
   let propsExpression: PropsExpression | undefined = undefined
 
   // has v-bind="object" or v-on="object", wrap with mergeProps
@@ -721,7 +736,7 @@ export function buildProps(
     )
   }
 
-  // patchFlag analysis
+  // patchFlag analysis 分析补丁标志
   if (hasDynamicKeys) {
     patchFlag |= PatchFlags.FULL_PROPS
   } else {
@@ -746,7 +761,7 @@ export function buildProps(
     patchFlag |= PatchFlags.NEED_PATCH
   }
 
-  // pre-normalize props, SSR is skipped for now
+  // pre-normalize props, SSR is skipped for now 预标准化属性
   if (!context.inSSR && propsExpression) {
     switch (propsExpression.type) {
       case NodeTypes.JS_OBJECT_EXPRESSION:

@@ -262,11 +262,18 @@ export default class Tokenizer {
     return this.mode === ParseMode.SFC && this.stack.length === 0
   }
 
+  /**
+   * 初始化词法分析器
+   * @param stack 元素节点栈，用于跟踪当前解析的元素层次结构
+   * @param cbs 回调函数，用于处理解析到的文本、插值表达式、标签名等
+   */
   constructor(
     private readonly stack: ElementNode[],
     private readonly cbs: Callbacks,
   ) {
+    // 非浏览器环境下，创建 EntityDecoder 实例
     if (!__BROWSER__) {
+      // htmlDecodeTree - HTML 实体解码树，用于快速查找和解析 HTML 实体
       this.entityDecoder = new EntityDecoder(htmlDecodeTree, (cp, consumed) =>
         this.emitCodePoint(cp, consumed),
       )
