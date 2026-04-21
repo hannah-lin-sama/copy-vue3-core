@@ -42,6 +42,11 @@ export function parseStringStyle(cssText: string): NormalizedStyle {
   return ret
 }
 
+/**
+ * 将样式对象转换为字符串
+ * @param styles 样式对象
+ * @returns 样式字符串
+ */
 export function stringifyStyle(
   styles: NormalizedStyle | string | undefined,
 ): string {
@@ -51,9 +56,14 @@ export function stringifyStyle(
   let ret = ''
   for (const key in styles) {
     const value = styles[key]
+
+    // 只处理值为字符串或数字的属性
     if (isString(value) || typeof value === 'number') {
+      // 对于 CSS 变量（以 -- 开头的键），保持原样
+      // 对于普通 CSS 属性，使用 hyphenate 函数转换为连字符格式（如 fontSize → font-size）
       const normalizedKey = key.startsWith(`--`) ? key : hyphenate(key)
       // only render valid values
+      // 构建 CSS 字符串，格式为 key:value;
       ret += `${normalizedKey}:${value};`
     }
   }

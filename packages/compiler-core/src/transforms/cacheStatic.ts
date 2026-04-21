@@ -80,13 +80,15 @@ function walk(
   inFor = false,
 ) {
   const { children } = node // 获取子节点列表
-  // 存储可缓存的节点
+  // 收集可缓存的静态节点（最终编译为 _cache 缓存）
   const toCache: (PlainElementNode | TextCallNode)[] = []
 
   for (let i = 0; i < children.length; i++) {
     const child = children[i]
     // only plain elements & text calls are eligible for caching.
-    // 普通元素节点
+
+    // 一、普通元素节点
+    // 只处理普通元素（非组件、非插槽等）
     if (
       child.type === NodeTypes.ELEMENT &&
       child.tagType === ElementTypes.ELEMENT
@@ -97,17 +99,25 @@ function walk(
           ConstantTypes.NOT_CONSTANT
         : getConstantType(child, context)
 
+      /**
+          NOT_CONSTANT = 0, // 非常量表达式，在编译时无法确定其值
+          CAN_SKIP_PATCH, // 1 可以跳过补丁的常量，通常是静态节点
+          CAN_CACHE, // 2 可以缓存的常量，其值在编译时已知
+          CAN_STRINGIFY, // 3 可以字符串化的常量，其值可以在编译时转换为字符串
+         */
+      // ============== 场景1：节点是静态节点 ==============
       if (constantType > ConstantTypes.NOT_CONSTANT) {
-        // 是静态节点
         if (constantType >= ConstantTypes.CAN_CACHE) {
-          // 可以缓存
+          // 如果常量类型达到 CAN_CACHE（意味着节点极其稳定，可被 v-once 缓存）
 
-          // 设置 patchFlag 为 PatchFlags.CACHED
+          // 设置 patchFlag 为 PatchFlags.CACHED （即 -1，表示完全静态）
           ;(child.codegenNode as VNodeCall).patchFlag = PatchFlags.CACHED
           // 节点添加到 toCache 数组中
           toCache.push(child)
           continue
         }
+
+        // ============== 场景2：节点非整体静态，但属性可提升 ==============
       } else {
         // node may contain dynamic children, but its props may be eligible for
         // hoisting.
@@ -117,6 +127,7 @@ function walk(
         // 节点是VNODE_CALL 类型（虚拟节点调用）
         if (codegenNode.type === NodeTypes.VNODE_CALL) {
           const flag = codegenNode.patchFlag
+
           if (
             (flag === undefined || // 未标记的节点
               flag === PatchFlags.NEED_PATCH || // 需要比对的节点
@@ -133,7 +144,8 @@ function walk(
               codegenNode.props = context.hoist(props)
             }
           }
-          // 动态属性提升
+          // 动态属性列表（dynamicProps）：它是编译器生成的一个静态字符串数组，仅用于记录哪些属性名是动态绑定的。
+          // 这个数组本身不依赖任何响应式数据，所以可以被提升。
           if (codegenNode.dynamicProps) {
             codegenNode.dynamicProps = context.hoist(codegenNode.dynamicProps)
           }
@@ -147,7 +159,7 @@ function walk(
         : // 计算节点的常量类型
           getConstantType(child, context)
 
-      // 可以缓存
+      // 纯静态文本节点 → 加入缓存，避免重复生成文本 VNode。
       if (constantType >= ConstantTypes.CAN_CACHE) {
         if (
           // 代码生成节点类型为 JavaScript 调用表达式

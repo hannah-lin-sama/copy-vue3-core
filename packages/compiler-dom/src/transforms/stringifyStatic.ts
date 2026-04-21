@@ -73,12 +73,16 @@ const expReplaceRE = /__VUE_EXP_START__(.*?)__VUE_EXP_END__/g
  *
  * This optimization is only performed in Node.js.
  */
+//  Vue3 预字符串化（Pre-stringification）
+// 把连续的纯静态节点 → 直接编译成 HTML 字符串 → 运行时 innerHTML 插入，彻底跳过 VNode 创建、Diff、DOM 逐个生成流程
 export const stringifyStatic: HoistTransform = (children, context, parent) => {
   // bail stringification for slot content
+  // 插槽内容不做字符串化（插槽有作用域、动态性）
   if (context.scopes.vSlot > 0) {
     return
   }
 
+  // 判断父节点是否已缓存
   const isParentCached =
     parent.type === NodeTypes.ELEMENT &&
     parent.codegenNode &&
@@ -87,16 +91,18 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
     !isArray(parent.codegenNode.children) &&
     parent.codegenNode.children.type === NodeTypes.JS_CACHE_EXPRESSION
 
-  let nc = 0 // current node count
-  let ec = 0 // current element with binding count
-  const currentChunk: StringifiableNode[] = []
+  let nc = 0 // current node count 当前连续静态节点总数量
+  let ec = 0 // current element with binding count 当前带绑定的静态元素数量
+  const currentChunk: StringifiableNode[] = [] // 待合并的静态节点队列
 
+  // 执行合并
   const stringifyCurrentChunk = (currentIndex: number): number => {
     if (
-      nc >= StringifyThresholds.NODE_COUNT ||
-      ec >= StringifyThresholds.ELEMENT_WITH_BINDING_COUNT
+      nc >= StringifyThresholds.NODE_COUNT || // 大于20
+      ec >= StringifyThresholds.ELEMENT_WITH_BINDING_COUNT // 大于5
     ) {
       // combine all currently eligible nodes into a single static vnode call
+      // 创建静态 VNode 调用
       const staticCall = createCallExpression(context.helper(CREATE_STATIC), [
         JSON.stringify(
           currentChunk.map(node => stringifyNode(node, context)).join(''),
@@ -108,6 +114,7 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
 
       const deleteCount = currentChunk.length - 1
 
+      // 父节点已缓存：直接替换 children
       if (isParentCached) {
         // if the parent is cached, then `children` is also the value of the
         // CacheExpression. Just replace the corresponding range in the cached
@@ -118,6 +125,8 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
           // @ts-expect-error
           staticCall,
         )
+
+        // 父节点未缓存：用第一个节点承载，删除剩下节点
       } else {
         // replace the first node's hoisted expression with the static vnode call
         ;(currentChunk[0].codegenNode as CacheExpression).value = staticCall
@@ -143,6 +152,7 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
     return 0
   }
 
+  // 遍历子节点 → 收集连续静态节点 → 达到阈值就合并成 HTML 字符串 → 替换原节点
   let i = 0
   for (; i < children.length; i++) {
     const child = children[i]
@@ -168,6 +178,7 @@ export const stringifyStatic: HoistTransform = (children, context, parent) => {
     currentChunk.length = 0
   }
   // in case the last node was also stringifiable
+  // 处理最后可能剩下的连续静态节点
   stringifyCurrentChunk(i)
 }
 
@@ -186,6 +197,8 @@ const getCachedNode = (
 }
 
 const dataAriaRE = /^(?:data|aria)-/
+
+// 可字符串化属性
 const isStringifiableAttr = (name: string, ns: Namespaces) => {
   return (
     (ns === Namespaces.HTML
@@ -198,11 +211,13 @@ const isStringifiableAttr = (name: string, ns: Namespaces) => {
   )
 }
 
+// 非可字符串化标签
 const isNonStringifiable = /*@__PURE__*/ makeMap(
   `caption,thead,tr,th,tbody,td,tfoot,colgroup,col`,
 )
 
 /**
+ * 分析节点是否可被字符串化
  * for a cached node, analyze it and return:
  * - false: bailed (contains non-stringifiable props or runtime constant)
  * - [nc, ec] where
@@ -210,24 +225,29 @@ const isNonStringifiable = /*@__PURE__*/ makeMap(
  *   - ec is the number of element with bindings inside
  */
 function analyzeNode(node: StringifiableNode): [number, number] | false {
+  // 非可字符串化标签直接返回 false
   if (node.type === NodeTypes.ELEMENT && isNonStringifiable(node.tag)) {
     return false
   }
 
   // v-once nodes should not be stringified
+  //  如果节点有 v-once 指令，返回 false（v-once 节点不应被字符串化）
   if (node.type === NodeTypes.ELEMENT && findDir(node, 'once', true)) {
     return false
   }
 
+  // 如果节点是文本调用节点，直接返回 [1, 0]（1个节点，0个带绑定的元素）
   if (node.type === NodeTypes.TEXT_CALL) {
+    // 第一个数字：节点总数
+    // 第二个数字：带有绑定的元素数量
     return [1, 0]
   }
 
-  let nc = 1 // node count
-  let ec = node.props.length > 0 ? 1 : 0 // element w/ binding count
-  let bailed = false
+  let nc = 1 // node count 节点计数
+  let ec = node.props.length > 0 ? 1 : 0 // element w/ binding count 带有绑定的元素计数
+  let bailed = false // 标记是否放弃分析
   const bail = (): false => {
-    bailed = true
+    bailed = true // 标记为放弃分析
     return false
   }
 
@@ -237,9 +257,11 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
   // i.e. non-phrasing-content tags inside `<p>`
   function walk(node: ElementNode): boolean {
     const isOptionTag = node.tag === 'option' && node.ns === Namespaces.HTML
+
     for (let i = 0; i < node.props.length; i++) {
       const p = node.props[i]
       // bail on non-attr bindings
+      // 普通属性并且不可字符串化，调用 bail() 放弃分析
       if (
         p.type === NodeTypes.ATTRIBUTE &&
         !isStringifiableAttr(p.name, node.ns)
@@ -248,6 +270,7 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
       }
       if (p.type === NodeTypes.DIRECTIVE && p.name === 'bind') {
         // bail on non-attr bindings
+        // 指令参数并且不可字符串化，调用 bail() 放弃分析
         if (
           p.arg &&
           (p.arg.type === NodeTypes.COMPOUND_EXPRESSION ||
@@ -255,6 +278,8 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
         ) {
           return bail()
         }
+
+        // 指令表达式并且不可字符串化，调用 bail() 放弃分析
         if (
           p.exp &&
           (p.exp.type === NodeTypes.COMPOUND_EXPRESSION ||
@@ -292,27 +317,39 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
   return walk(node) ? [nc, ec] : false
 }
 
+/**
+ * 将模板节点转换为字符串表示，负责将单个静态节点转换为 HTML 字符串
+ * @param node
+ * @param context
+ * @returns
+ */
 function stringifyNode(
   node: string | TemplateChildNode,
   context: TransformContext,
 ): string {
+  // 如果输入是字符串，直接返回
   if (isString(node)) {
     return node
   }
+  // 如果输入是 Symbol，返回空字符串
   if (isSymbol(node)) {
     return ``
   }
   switch (node.type) {
     case NodeTypes.ELEMENT:
       return stringifyElement(node, context)
+    // Text 节点：转义 HTML 后返回
     case NodeTypes.TEXT:
       return escapeHtml(node.content)
     case NodeTypes.COMMENT:
       return `<!--${escapeHtml(node.content)}-->`
+    // Interpolation 节点：计算常量值后转义 HTML 返回
     case NodeTypes.INTERPOLATION:
       return escapeHtml(toDisplayString(evaluateConstant(node.content)))
+    // CompoundExpression 节点：计算常量值后转义 HTML 返回
     case NodeTypes.COMPOUND_EXPRESSION:
       return escapeHtml(evaluateConstant(node))
+    // TextCall 节点：递归处理内容
     case NodeTypes.TEXT_CALL:
       return stringifyNode(node.content, context)
     default:
@@ -321,31 +358,47 @@ function stringifyNode(
   }
 }
 
+/**
+ * 将元素节点转换为 HTML 字符串表示
+ * @param node
+ * @param context
+ * @returns
+ */
 function stringifyElement(
   node: ElementNode,
   context: TransformContext,
 ): string {
   let res = `<${node.tag}`
-  let innerHTML = ''
+  let innerHTML = '' // 用于存储 v-html 或 v-text 的内容
+
   for (let i = 0; i < node.props.length; i++) {
     const p = node.props[i]
+
+    // 1、对于普通属性，直接添加到标签中，并对属性值进行 HTML 转义
     if (p.type === NodeTypes.ATTRIBUTE) {
       res += ` ${p.name}`
       if (p.value) {
         res += `="${escapeHtml(p.value.content)}"`
       }
+
+      // 2、处理指令
     } else if (p.type === NodeTypes.DIRECTIVE) {
+      // 2.1 处理 v-bind 指令
       if (p.name === 'bind') {
         const exp = p.exp as SimpleExpressionNode
+
+        // 处理内部生成的字符串常量引用
         if (exp.content[0] === '_') {
           // internally generated string constant references
           // e.g. imported URL strings via compiler-sfc transformAssetUrl plugin
+          // 生成特殊格式的属性值：__VUE_EXP_START__${exp.content}__VUE_EXP_END__
+          // 这是一种标记，后续会被替换为实际的常量值
           res += ` ${
             (p.arg as SimpleExpressionNode).content
           }="__VUE_EXP_START__${exp.content}__VUE_EXP_END__"`
           continue
         }
-        // #6568
+        // 处理布尔属性
         if (
           isBooleanAttr((p.arg as SimpleExpressionNode).content) &&
           exp.content === 'false'
@@ -353,6 +406,7 @@ function stringifyElement(
           continue
         }
         // constant v-bind, e.g. :foo="1"
+        // 处理常量绑定
         let evaluated = evaluateConstant(exp)
         if (evaluated != null) {
           const arg = p.arg && (p.arg as SimpleExpressionNode).content
@@ -365,11 +419,17 @@ function stringifyElement(
             evaluated,
           )}"`
         }
+
+        // 处理 v-html 指令
       } else if (p.name === 'html') {
         // #5439 v-html with constant value
         // not sure why would anyone do this but it can happen
+        // 计算表达式值并存储到 innerHTML
         innerHTML = evaluateConstant(p.exp as SimpleExpressionNode)
+
+        // 处理 v-text 指令
       } else if (p.name === 'text') {
+        // 计算表达式值，转换为字符串并转义后存储到 innerHTML
         innerHTML = escapeHtml(
           toDisplayString(evaluateConstant(p.exp as SimpleExpressionNode)),
         )
@@ -394,6 +454,7 @@ function stringifyElement(
 }
 
 // __UNSAFE__
+// 计算常量表达式的值
 // Reason: eval.
 // It's technically safe to eval because only constant expressions are possible
 // here, e.g. `{{ 1 }}` or `{{ 'foo' }}`
@@ -402,19 +463,25 @@ function stringifyElement(
 // (see compiler-core/src/transforms/transformExpression)
 function evaluateConstant(exp: ExpressionNode): string {
   if (exp.type === NodeTypes.SIMPLE_EXPRESSION) {
+    // 使用 new Function 动态执行表达式内容
+    // 这种方式安全可靠，因为只在编译时使用，且处理的是静态内容
     return new Function(`return (${exp.content})`)()
   } else {
     // compound
     let res = ``
     exp.children.forEach(c => {
+      // 跳过字符串和 Symbol 类型的子节点
       if (isString(c) || isSymbol(c)) {
         return
       }
       if (c.type === NodeTypes.TEXT) {
+        // 对于文本节点，直接添加其内容
         res += c.content
       } else if (c.type === NodeTypes.INTERPOLATION) {
+        // 对于插值节点，递归计算其内容并转换为字符串
         res += toDisplayString(evaluateConstant(c.content))
       } else {
+        // 对于其他表达式节点，递归计算并添加结果
         res += evaluateConstant(c as ExpressionNode)
       }
     })

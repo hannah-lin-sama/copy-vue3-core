@@ -148,11 +148,11 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
   // cache v-model handler if applicable (when it doesn't refer any scope vars)
   // 事件处理器缓存
   if (
-    !__BROWSER__ &&
-    context.prefixIdentifiers &&
-    !context.inVOnce &&
-    context.cacheHandlers &&
-    !hasScopeRef(exp, context.identifiers)
+    !__BROWSER__ && // 条件1：非浏览器环境
+    context.prefixIdentifiers && // 条件2：开启标识符前缀模式
+    !context.inVOnce && // 条件3：不在 v-once 内部
+    context.cacheHandlers && // 条件4：显式开启了事件缓存选项
+    !hasScopeRef(exp, context.identifiers) // 条件5：表达式未引用局部作用域变量
   ) {
     props[1].value = context.cache(props[1].value)
   }

@@ -1,7 +1,15 @@
 const escapeRE = /["'&<>]/
 
+/**
+ * 将 HTML 特殊字符转义为对应 HTML 实体
+ * 防止 XSS（跨站脚本）攻击，并确保 HTML 内容能被正确解析
+ * @param string
+ * @returns
+ */
 export function escapeHtml(string: unknown): string {
   const str = '' + string
+
+  // 匹配特殊字符“ 双引号、'单引号、 & < 左尖括号、右尖括号 >
   const match = escapeRE.exec(str)
 
   if (!match) {

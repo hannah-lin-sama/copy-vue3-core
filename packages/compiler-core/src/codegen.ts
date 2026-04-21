@@ -319,6 +319,7 @@ export function generate(
     ? // 如果是内联 setup 模式，创建新的上下文
       createCodegenContext(ast, options)
     : context
+
   if (!__BROWSER__ && mode === 'module') {
     // 模块模式：调用 genModulePreamble 生成模块前缀
     genModulePreamble(ast, preambleContext, genScopeId, isSetupInlined)
@@ -424,6 +425,11 @@ export function generate(
   }
 }
 
+/**
+ * 生成渲染函数的前置代码
+ * @param ast
+ * @param context
+ */
 function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
   const {
     ssr,
@@ -434,6 +440,10 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
     runtimeGlobalName,
     ssrRuntimeModuleName,
   } = context
+
+  // 生成 Vue 绑定
+  // 在非浏览器环境且是 SSR 时，使用 require 导入 Vue
+  // 其他情况使用全局 Vue 变量
   const VueBinding =
     !__BROWSER__ && ssr
       ? `require(${JSON.stringify(runtimeModuleName)})`
@@ -442,8 +452,10 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
   // In prefix mode, we place the const declaration at top so it's done
   // only once; But if we not prefixing, we place the declaration inside the
   // with block so it doesn't incur the `in` check cost for every helper access.
+  // 生成 Helpers 常量声明
   const helpers = Array.from(ast.helpers)
   if (helpers.length > 0) {
+    // 前缀模式：在函数顶部生成一次常量声明
     if (!__BROWSER__ && prefixIdentifiers) {
       push(
         `const { ${helpers.map(aliasHelper).join(', ')} } = ${VueBinding}\n`,
@@ -452,6 +464,9 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
     } else {
       // "with" mode.
       // save Vue in a separate variable to avoid collision
+      // with 模式：
+      // 保存 Vue 到单独变量避免冲突
+      // 为静态内容生成必要的 helpers 声明
       push(`const _Vue = ${VueBinding}\n`, NewlineType.End)
       // in "with" mode, helpers are declared inside the with block to avoid
       // has check cost, but hoists are lifted out of the function - we need
@@ -474,6 +489,7 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
   // generate variables for ssr helpers
   if (!__BROWSER__ && ast.ssrHelpers && ast.ssrHelpers.length) {
     // ssr guarantees prefixIdentifier: true
+    // 在非浏览器环境且存在 SSR helpers 时生成
     push(
       `const { ${ast.ssrHelpers
         .map(aliasHelper)
@@ -481,11 +497,19 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
       NewlineType.End,
     )
   }
+  // 调用 genHoists 处理被提升的静态内容
   genHoists(ast.hoists, context)
   newline()
   push(`return `)
 }
 
+/**
+ * 生成模块的前置代码
+ * @param ast
+ * @param context
+ * @param genScopeId
+ * @param inline
+ */
 function genModulePreamble(
   ast: RootNode,
   context: CodegenContext,
@@ -501,6 +525,7 @@ function genModulePreamble(
   } = context
 
   // generate import statements for helpers
+  // 生成辅助函数导入
   if (ast.helpers.size) {
     const helpers = Array.from(ast.helpers)
     if (optimizeImports) {
@@ -509,6 +534,7 @@ function genModulePreamble(
       // incurring both payload size increase and potential perf overhead.
       // therefore we assign the imports to variables (which is a constant ~50b
       // cost per-component instead of scaling with template size)
+      // 优化模式：先导入，再绑定到变量，避免 webpack code-split 时的性能开销
       push(
         `import { ${helpers
           .map(s => helperNameMap[s])
@@ -522,6 +548,7 @@ function genModulePreamble(
         NewlineType.End,
       )
     } else {
+      // 常规模式：直接使用 as 别名导入
       push(
         `import { ${helpers
           .map(s => `${helperNameMap[s]} as _${helperNameMap[s]}`)
@@ -531,6 +558,7 @@ function genModulePreamble(
     }
   }
 
+  // 生成 SSR 辅助函数导入
   if (ast.ssrHelpers && ast.ssrHelpers.length) {
     push(
       `import { ${ast.ssrHelpers
@@ -540,11 +568,13 @@ function genModulePreamble(
     )
   }
 
+  // 处理模板中的导入
   if (ast.imports.length) {
     genImports(ast.imports, context)
     newline()
   }
 
+  // 生成静态内容提升代码
   genHoists(ast.hoists, context)
   newline()
 
@@ -590,29 +620,34 @@ function genAssets(
 }
 
 /**
- * 生成 hoists 数组的代码
+ * 将模板中的静态内容（如静态元素、静态文本等）提升到渲染函数外部，作为常量存储，避免在每次渲染时重复创建相同的静态内容，从而提高性能。
  * @param hoists
  * @param hoists 节点数组，包含代码生成节点或 null 值
  * @param context
  * @returns
  */
 function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
+  // 如果 hoists 数组为空，直接返回，不生成任何代码
   if (!hoists.length) {
     return
   }
-  context.pure = true
+  context.pure = true // 设置纯函数标记
   const { push, newline } = context
-  newline()
+  newline() // 添加一个换行，提高生成代码的可读性
 
+  // 遍历 hoists 数组
   for (let i = 0; i < hoists.length; i++) {
     const exp = hoists[i]
     if (exp) {
+      // 生成常量声明，变量名为 _hoisted_${i + 1}（从 1 开始编号）
       push(`const _hoisted_${i + 1} = `)
+      // 调用 genNode 函数生成表达式的代码
       genNode(exp, context)
       newline()
     }
   }
 
+  // 生成完提升代码后，重置 context.pure = false，恢复默认状态
   context.pure = false
 }
 
