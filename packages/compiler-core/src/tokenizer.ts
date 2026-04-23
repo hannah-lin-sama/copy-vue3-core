@@ -251,6 +251,7 @@ export default class Tokenizer {
   /** For disabling RCDATA tags handling */
   public inXML = false
   /** For disabling interpolation parsing in v-pre */
+  // v-pre 标签内部，插值表达式不被解析，直接作为普通文本处理
   public inVPre = false
   /** Record newline positions for fast line / column calculation */
   private newlines: number[] = []
@@ -358,6 +359,11 @@ export default class Tokenizer {
   public delimiterClose: Uint8Array = defaultDelimitersClose
   private delimiterIndex = -1
 
+  /**
+   * 识别和处理插值表达式的开始定界符（通常是 {{）。
+   * 当解析器遇到可能的插值表达式开始时，会进入此状态并调用此函数
+   * @param c
+   */
   private stateInterpolationOpen(c: number): void {
     if (c === this.delimiterOpen[this.delimiterIndex]) {
       if (this.delimiterIndex === this.delimiterOpen.length - 1) {
@@ -563,36 +569,54 @@ export default class Tokenizer {
     this.sequenceIndex = offset
   }
 
+  /**
+   * 处理标签名前的字符
+   * @param c 当前字符
+   */
   private stateBeforeTagName(c: number): void {
+    // 遇到 ! 字符，切换到 BeforeDeclaration 状态
     if (c === CharCodes.ExclamationMark) {
       this.state = State.BeforeDeclaration
       this.sectionStart = this.index + 1
+
+      // 如果遇到 ? 字符，切换到 InProcessingInstruction 状态
     } else if (c === CharCodes.Questionmark) {
       this.state = State.InProcessingInstruction
       this.sectionStart = this.index + 1
+
+      // 处理标签开始
     } else if (isTagStartChar(c)) {
       this.sectionStart = this.index
+      // BASE 模式：直接切换到 State.InTagName
       if (this.mode === ParseMode.BASE) {
         // no special tags in base mode
         this.state = State.InTagName
+        // SFC 根级别：切换到 InSFCRootTagName 状态
       } else if (this.inSFCRoot) {
         // SFC mode + root level
         // - everything except <template> is RAWTEXT
         // - <template> with lang other than html is also RAWTEXT
         this.state = State.InSFCRootTagName
+
+        // 非 XML 模式
       } else if (!this.inXML) {
         // HTML mode
         // - <script>, <style> RAWTEXT
         // - <title>, <textarea> RCDATA
+        // 如果首字符是 t（ASCII 码 116），
+        // 切换到 State.BeforeSpecialT（用于处理 <title>、<textarea> 等特殊标签）
         if (c === 116 /* t */) {
           this.state = State.BeforeSpecialT
         } else {
+          // 如果首字符是 s（ASCII 码 115），
+          // 切换到 State.BeforeSpecialS（用于处理 <script>、<style> 等特殊标签）
           this.state =
             c === 115 /* s */ ? State.BeforeSpecialS : State.InTagName
         }
       } else {
         this.state = State.InTagName
       }
+      // 遇到 / 字符，切换到 BeforeClosingTagName 状态
     } else if (c === CharCodes.Slash) {
       this.state = State.BeforeClosingTagName
     } else {
@@ -783,14 +807,26 @@ export default class Tokenizer {
     this.cbs.onattribnameend(this.index)
     this.stateAfterAttrName(c)
   }
+
+  /**
+   * 处理属性名解析完成后的状态转换
+   * @param c
+   */
   private stateAfterAttrName(c: number): void {
+    // 1、遇到 = 字符（CharCodes.Eq），切换到 State.BeforeAttrValue 状态
+    // 这表示属性有一个值需要解析
     if (c === CharCodes.Eq) {
       this.state = State.BeforeAttrValue
+
+      // 2、遇到 / 字符（CharCodes.Slash）或 > 字符（CharCodes.Gt）
     } else if (c === CharCodes.Slash || c === CharCodes.Gt) {
+      // 标记当前属性结束,无值属性
       this.cbs.onattribend(QuoteType.NoValue, this.sectionStart)
       this.sectionStart = -1
       this.state = State.BeforeAttrName
       this.stateBeforeAttrName(c)
+
+      // 3、遇到非空白字符
     } else if (!isWhitespace(c)) {
       this.cbs.onattribend(QuoteType.NoValue, this.sectionStart)
       this.handleAttrStart(c)
@@ -944,30 +980,40 @@ export default class Tokenizer {
   }
 
   /**
+   * 将模板字符串解析为一系列标记（tokens）
    * Iterates through the buffer, calling the function corresponding to the current state.
    *
    * States that are more likely to be hit are higher up, as a performance improvement.
    */
   public parse(input: string): void {
     this.buffer = input
+    // 遍历输入字符串
     while (this.index < this.buffer.length) {
+      // 获取当前字符的 Unicode 码
       const c = this.buffer.charCodeAt(this.index)
       if (c === CharCodes.NewLine && this.state !== State.InEntity) {
+        // 记录换行符的位置
         this.newlines.push(this.index)
       }
+
+      // 根据当前状态调用对应的处理函数
       switch (this.state) {
+        // 处理普通文本内容
         case State.Text: {
           this.stateText(c)
           break
         }
+        // 处理插值表达式开始（如 {{）
         case State.InterpolationOpen: {
           this.stateInterpolationOpen(c)
           break
         }
+        // 处理插值表达式内容
         case State.Interpolation: {
           this.stateInterpolation(c)
           break
         }
+        // 处理插值表达式结束（如 }}）
         case State.InterpolationClose: {
           this.stateInterpolationClose(c)
           break
@@ -976,6 +1022,7 @@ export default class Tokenizer {
           this.stateSpecialStartSequence(c)
           break
         }
+        // 处理 RCDATA 内容（如 <textarea> 内部）
         case State.InRCDATA: {
           this.stateInRCDATA(c)
           break

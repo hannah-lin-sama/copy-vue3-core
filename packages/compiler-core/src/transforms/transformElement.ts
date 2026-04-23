@@ -87,14 +87,16 @@ export const transformElement: NodeTransform = (node, context) => {
     }
 
     const { tag, props } = node
-    const isComponent = node.tagType === ElementTypes.COMPONENT
+    const isComponent = node.tagType === ElementTypes.COMPONENT // 是否组件节点
 
     // The goal of the transform is to create a codegenNode implementing the
     // VNodeCall interface.
     let vnodeTag = isComponent
       ? resolveComponentType(node as ComponentNode, context)
-      : `"${tag}"`
+      : // 对于普通元素，直接使用标签字符串
+        `"${tag}"`
 
+    // 判断是否为动态组件
     const isDynamicComponent =
       isObject(vnodeTag) && vnodeTag.callee === RESOLVE_DYNAMIC_COMPONENT
 
@@ -105,6 +107,8 @@ export const transformElement: NodeTransform = (node, context) => {
     let dynamicPropNames: string[] | undefined
     let vnodeDirectives: VNodeCall['directives']
 
+    // 确定是否使用块：
+    // 动态组件、Teleport、Suspense 以及特殊标签（svg、foreignObject、math）需要强制使用块
     let shouldUseBlock =
       // dynamic component may resolve to plain elements
       isDynamicComponent ||
@@ -119,6 +123,7 @@ export const transformElement: NodeTransform = (node, context) => {
 
     // props
     if (props.length > 0) {
+      // 用 buildProps 处理节点属性
       const propsBuildResult = buildProps(
         node,
         context,
@@ -130,9 +135,12 @@ export const transformElement: NodeTransform = (node, context) => {
       patchFlag = propsBuildResult.patchFlag
       dynamicPropNames = propsBuildResult.dynamicPropNames
       const directives = propsBuildResult.directives
+      // 处理指令
       vnodeDirectives =
         directives && directives.length
-          ? (createArrayExpression(
+          ? // 创建数组表达式
+            (createArrayExpression(
+              // 每个指令调用 buildDirectiveArgs 函数，生成指令参数
               directives.map(dir => buildDirectiveArgs(dir, context)),
             ) as DirectiveArguments)
           : undefined
@@ -165,6 +173,7 @@ export const transformElement: NodeTransform = (node, context) => {
         }
       }
 
+      // 对于组件（非 Teleport 和 KeepAlive），将子节点构建为插槽
       const shouldBuildAsSlots =
         isComponent &&
         // Teleport is not a real component and has dedicated runtime handling
@@ -199,15 +208,18 @@ export const transformElement: NodeTransform = (node, context) => {
           vnodeChildren = node.children
         }
       } else {
+        // 对于多个子节点，直接使用子节点数组
         vnodeChildren = node.children
       }
     }
 
     // patchFlag & dynamicPropNames
+    // 如果有动态属性，将其转换为字符串数组
     if (dynamicPropNames && dynamicPropNames.length) {
       vnodeDynamicProps = stringifyDynamicPropNames(dynamicPropNames)
     }
 
+    // 生成 VNode 调用节点
     node.codegenNode = createVNodeCall(
       context,
       vnodeTag,
@@ -738,17 +750,23 @@ export function buildProps(
 
   // patchFlag analysis 分析补丁标志
   if (hasDynamicKeys) {
+    // 如果元素有动态键（hasDynamicKeys），则设置 PatchFlags.FULL_PROPS
+    // 动态键是指使用了动态属性名的情况，如 : [key] = "value"
     patchFlag |= PatchFlags.FULL_PROPS
   } else {
+    // 如果有类绑定（hasClassBinding）且不是组件，则设置 PatchFlags.CLASS
     if (hasClassBinding && !isComponent) {
       patchFlag |= PatchFlags.CLASS
     }
+    // 如果有样式绑定（hasStyleBinding）且不是组件，则设置 PatchFlags.STYLE
     if (hasStyleBinding && !isComponent) {
       patchFlag |= PatchFlags.STYLE
     }
+    // 如果有动态属性名（dynamicPropNames.length），则设置 PatchFlags.PROPS
     if (dynamicPropNames.length) {
       patchFlag |= PatchFlags.PROPS
     }
+    // 如果有水合事件绑定（hasHydrationEventBinding），则设置 PatchFlags.NEED_HYDRATION
     if (hasHydrationEventBinding) {
       patchFlag |= PatchFlags.NEED_HYDRATION
     }
@@ -938,6 +956,11 @@ export function buildDirectiveArgs(
   return createArrayExpression(dirArgs, dir.loc)
 }
 
+/**
+ * 将动态属性名称数组转换为字符串数组
+ * @param props 动态属性名称数组
+ * @returns 字符串数组
+ */
 function stringifyDynamicPropNames(props: string[]): string {
   let propsNamesString = `[`
   for (let i = 0, l = props.length; i < l; i++) {

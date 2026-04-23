@@ -108,20 +108,34 @@ const tokenizer = new Tokenizer(stack, {
     onText(char, start, end)
   },
 
+  /**
+   * 处理模板中的插值表达式（如 {{ message }}）
+   * @param start 插值表达式的起始索引
+   * @param end 插值表达式的结束索引
+   * @returns
+   */
   oninterpolation(start, end) {
     if (inVPre) {
+      // 整个插值表达式作为普通文本处理，调用 onText 函数
       return onText(getSlice(start, end), start, end)
     }
+    // 算插值表达式的内部起始位置：start + tokenizer.delimiterOpen.length，跳过开始定界符（如 {{）
     let innerStart = start + tokenizer.delimiterOpen.length
+    // 计算插值表达式的内部结束位置：end - tokenizer.delimiterClose.length，跳过结束定界符（如 }}
     let innerEnd = end - tokenizer.delimiterClose.length
+
+    // 去除内部内容的前导空白：从 innerStart 开始，跳过所有空白字符
     while (isWhitespace(currentInput.charCodeAt(innerStart))) {
       innerStart++
     }
+    // 去除内部内容的尾随空白：从 innerEnd - 1 开始，向前跳过所有空白字符
     while (isWhitespace(currentInput.charCodeAt(innerEnd - 1))) {
       innerEnd--
     }
+    // 获取表达式内容
     let exp = getSlice(innerStart, innerEnd)
     // decode entities for backwards compat
+    // HTML 实体解码
     if (exp.includes('&')) {
       if (__BROWSER__) {
         exp = currentOptions.decodeEntities!(exp, false)
@@ -129,6 +143,7 @@ const tokenizer = new Tokenizer(stack, {
         exp = decodeHTML(exp)
       }
     }
+    // 添加一个 INTERPOLATION 类型的 AST 节点
     addNode({
       type: NodeTypes.INTERPOLATION,
       content: createExp(exp, false, getLoc(innerStart, innerEnd)),
@@ -685,25 +700,34 @@ function getSlice(start: number, end: number) {
   return currentInput.slice(start, end)
 }
 
+/**
+ * 处理标签的结束部分
+ * @param end
+ */
 function endOpenTag(end: number) {
   if (tokenizer.inSFCRoot) {
     // in SFC mode, generate locations for root-level tags' inner content.
+    // 在 SFC（单文件组件）模式下，为根级标签生成内部内容的位置信息
     currentOpenTag!.innerLoc = getLoc(end + 1, end + 1)
   }
+  // 添加节点
   addNode(currentOpenTag!)
   const { tag, ns } = currentOpenTag!
   if (ns === Namespaces.HTML && currentOptions.isPreTag(tag)) {
     inPre++
   }
+
+  // 检查标签是否是 void 标签（如 <br>、<img> 等自闭合标签）
   if (currentOptions.isVoidTag(tag)) {
     onCloseTag(currentOpenTag!, end)
   } else {
+    // 将当前标签添加到栈（stack）的顶部
     stack.unshift(currentOpenTag!)
     if (ns === Namespaces.SVG || ns === Namespaces.MATH_ML) {
       tokenizer.inXML = true
     }
   }
-  currentOpenTag = null
+  currentOpenTag = null // 表示当前标签的开始部分已处理完成
 }
 
 /**
@@ -736,22 +760,33 @@ function onText(content: string, start: number, end: number) {
   }
 }
 
+/**
+ * 处理关闭标签的解析和添加
+ * @param el 关闭的元素节点
+ * @param end 关闭标签的结束索引
+ * @param isImplied 是否为隐式关闭标签
+ */
 function onCloseTag(el: ElementNode, end: number, isImplied = false) {
   // attach end position
   if (isImplied) {
     // implied close, end should be backtracked to close
+    // 隐式关闭：如果元素是隐式关闭的，则将结束位置回溯到 < 字符
     setLocEnd(el.loc, backTrack(end, CharCodes.Lt))
   } else {
+    // 显式关闭：如果元素有显式的结束标签，则将结束位置设置到 > 字符之后
     setLocEnd(el.loc, lookAhead(end, CharCodes.Gt) + 1)
   }
 
   if (tokenizer.inSFCRoot) {
     // SFC root tag, resolve inner end
     if (el.children.length) {
+      // 如果有子节点，内部结束位置设为最后一个子节点的结束位置
       el.innerLoc!.end = extend({}, el.children[el.children.length - 1].loc.end)
     } else {
+      // 如果没有子节点，内部结束位置设为与开始位置相同
       el.innerLoc!.end = extend({}, el.innerLoc!.start)
     }
+    // 提取内部内容作为 source 属性
     el.innerLoc!.source = getSlice(
       el.innerLoc!.start.offset,
       el.innerLoc!.end.offset,
@@ -771,6 +806,7 @@ function onCloseTag(el: ElementNode, end: number, isImplied = false) {
   }
 
   // whitespace management
+  // 在非 RCDATA 模式下（如不在 <script> 或 <style> 标签内），对元素的子节点进行空白字符压缩处理
   if (!tokenizer.inRCDATA) {
     el.children = condenseWhitespace(children)
   }
@@ -780,13 +816,17 @@ function onCloseTag(el: ElementNode, end: number, isImplied = false) {
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
     const first = children[0]
     if (first && first.type === NodeTypes.TEXT) {
+      // 根据 HTML 规范移除第一个子文本节点的前导换行符
       first.content = first.content.replace(/^\r?\n/, '')
     }
   }
 
+  // 如果是 <pre> 标签，减少 inPre 计数器
   if (ns === Namespaces.HTML && currentOptions.isPreTag(tag)) {
     inPre--
   }
+
+  // 如果当前元素是 v-pre 边界，重置 inVPre 状态
   if (currentVPreBoundary === el) {
     inVPre = tokenizer.inVPre = false
     currentVPreBoundary = null
@@ -795,6 +835,7 @@ function onCloseTag(el: ElementNode, end: number, isImplied = false) {
     tokenizer.inXML &&
     (stack[0] ? stack[0].ns : currentOptions.ns) === Namespaces.HTML
   ) {
+    // 如果在 XML 模式且父元素是 HTML 命名空间，退出 XML 模式
     tokenizer.inXML = false
   }
 
@@ -875,12 +916,24 @@ function onCloseTag(el: ElementNode, end: number, isImplied = false) {
   }
 }
 
+/**
+ * 从指定位置向后（向右）搜索特定字符的位置
+ * @param index
+ * @param c
+ * @returns
+ */
 function lookAhead(index: number, c: number) {
   let i = index
   while (currentInput.charCodeAt(i) !== c && i < currentInput.length - 1) i++
   return i
 }
 
+/**
+ * 从指定位置向前搜索特定字符的位置
+ * @param index
+ * @param c
+ * @returns
+ */
 function backTrack(index: number, c: number) {
   let i = index
   while (currentInput.charCodeAt(i) !== c && i >= 0) i--
@@ -888,11 +941,17 @@ function backTrack(index: number, c: number) {
 }
 
 const specialTemplateDir = new Set(['if', 'else', 'else-if', 'for', 'slot'])
+
+/**
+ * 判断元素是否是一个片段模板
+ * @param param0
+ * @returns
+ */
 function isFragmentTemplate({ tag, props }: ElementNode): boolean {
   if (tag === 'template') {
     for (let i = 0; i < props.length; i++) {
       if (
-        props[i].type === NodeTypes.DIRECTIVE &&
+        props[i].type === NodeTypes.DIRECTIVE && // 是否是指令类型
         specialTemplateDir.has((props[i] as DirectiveNode).name)
       ) {
         return true
@@ -902,16 +961,24 @@ function isFragmentTemplate({ tag, props }: ElementNode): boolean {
   return false
 }
 
+/**
+ * 判断一个元素节点是否是一个 Vue 组件
+ * @param param0
+ * @returns
+ */
 function isComponent({ tag, props }: ElementNode): boolean {
+  // 判断一个元素节点是否是一个 Vue 组件
   if (currentOptions.isCustomElement(tag)) {
     return false
   }
   if (
-    tag === 'component' ||
-    isUpperCase(tag.charCodeAt(0)) ||
-    isCoreComponent(tag) ||
+    tag === 'component' || // 标签名是 'component'（Vue 的动态组件标签）
+    isUpperCase(tag.charCodeAt(0)) || // 标签名的第一个字符是大写（Vue 组件的命名约定）
+    isCoreComponent(tag) || // 标签是 Vue 核心组件
+    // 标签是内置组件
     (currentOptions.isBuiltInComponent &&
       currentOptions.isBuiltInComponent(tag)) ||
+    // 标签不是原生标签
     (currentOptions.isNativeTag && !currentOptions.isNativeTag(tag))
   ) {
     return true
@@ -921,7 +988,9 @@ function isComponent({ tag, props }: ElementNode): boolean {
   for (let i = 0; i < props.length; i++) {
     const p = props[i]
     if (p.type === NodeTypes.ATTRIBUTE) {
+      // 对于普通 is 属性
       if (p.name === 'is' && p.value) {
+        // 如果值以 'vue:' 开头，返回 true
         if (p.value.content.startsWith('vue:')) {
           return true
         } else if (
@@ -1015,11 +1084,18 @@ function hasNewlineChar(str: string) {
   return false
 }
 
+/**
+ * 压缩字符串中的空白字符。
+ * 它将连续的多个空白字符（如空格、制表符、换行符等）替换为单个空格，同时保留所有非空白字符
+ * @param str
+ * @returns
+ */
 function condense(str: string) {
   let ret = ''
-  let prevCharIsWhitespace = false
+  let prevCharIsWhitespace = false // 跟踪前一个字符是否为空白字符
   for (let i = 0; i < str.length; i++) {
     if (isWhitespace(str.charCodeAt(i))) {
+      // 前一个字符不是空白字符，添加一个空格，否则直接添加当前字符
       if (!prevCharIsWhitespace) {
         ret += ' '
         prevCharIsWhitespace = true
@@ -1033,6 +1109,7 @@ function condense(str: string) {
 }
 
 function addNode(node: TemplateChildNode) {
+  //  stack[0]（当前栈顶节点，通常是最近打开的元素）
   ;(stack[0] || currentRoot).children.push(node)
 }
 
@@ -1100,6 +1177,15 @@ enum ExpParseMode {
   Skip,
 }
 
+/**
+ *
+ * @param content 表达式的内容
+ * @param isStatic 是否是静态表达式
+ * @param loc 表达式的位置信息
+ * @param constType 表达式的常类型
+ * @param parseMode 解析模式
+ * @returns
+ */
 function createExp(
   content: SimpleExpressionNode['content'],
   isStatic: SimpleExpressionNode['isStatic'] = false,

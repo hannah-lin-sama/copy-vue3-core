@@ -255,9 +255,12 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
   // output compared to imperative node insertions.
   // probably only need to check for most common case
   // i.e. non-phrasing-content tags inside `<p>`
+  // 分析元素节点是否可以安全地被字符串化
   function walk(node: ElementNode): boolean {
+    // 特殊标签处理
     const isOptionTag = node.tag === 'option' && node.ns === Namespaces.HTML
 
+    // 属性检查
     for (let i = 0; i < node.props.length; i++) {
       const p = node.props[i]
       // bail on non-attr bindings
@@ -288,6 +291,7 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
           return bail()
         }
         // <option :value="1"> cannot be safely stringified
+        // 对于 <option> 标签的 :value 绑定，特殊处理（非静态表达式不可字符串化）
         if (
           isOptionTag &&
           isStaticArgOf(p.arg, 'value') &&
@@ -298,6 +302,7 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
         }
       }
     }
+    // 子节点检查
     for (let i = 0; i < node.children.length; i++) {
       nc++
       const child = node.children[i]
@@ -305,6 +310,7 @@ function analyzeNode(node: StringifiableNode): [number, number] | false {
         if (child.props.length > 0) {
           ec++
         }
+        // 递归检查子节点
         walk(child)
         if (bailed) {
           return false

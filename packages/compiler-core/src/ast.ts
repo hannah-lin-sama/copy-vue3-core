@@ -37,20 +37,20 @@ export enum NodeTypes {
   DIRECTIVE, // 7 指令节点，如 v-if
 
   // containers
-  COMPOUND_EXPRESSION,
-  IF,
-  IF_BRANCH,
-  FOR,
-  TEXT_CALL,
+  COMPOUND_EXPRESSION, // 8 复合表达式节点，由多个表达式组成
+  IF, // 9 条件节点，如 v-if
+  IF_BRANCH, // 10 条件分支节点，如 v-else、v-else-if
+  FOR, // 11 循环节点，如 v-for
+  TEXT_CALL, // 12 文本调用节点，用于处理带表达式的文本
   // codegen
-  VNODE_CALL,
-  JS_CALL_EXPRESSION,
-  JS_OBJECT_EXPRESSION,
-  JS_PROPERTY,
-  JS_ARRAY_EXPRESSION,
-  JS_FUNCTION_EXPRESSION,
-  JS_CONDITIONAL_EXPRESSION,
-  JS_CACHE_EXPRESSION,
+  VNODE_CALL, // 13 VNode 调用节点，用于创建 VNode 实例
+  JS_CALL_EXPRESSION, // 14 调用表达式节点，如 function() 或 method()
+  JS_OBJECT_EXPRESSION, // 15 JS对象表达式
+  JS_PROPERTY, // 16 JS属性表达式，如 obj.prop
+  JS_ARRAY_EXPRESSION, // 17 JS数组表达式，如 [1, 2, 3]
+  JS_FUNCTION_EXPRESSION, // 18 JS函数表达式，如 function() {}
+  JS_CONDITIONAL_EXPRESSION, // 19 条件表达式，如 a ? b : c
+  JS_CACHE_EXPRESSION, // 20 缓存表达式，用于缓存计算结果
 
   // ssr codegen
   JS_BLOCK_STATEMENT,
@@ -475,19 +475,30 @@ export interface FunctionExpression extends Node {
 }
 
 export interface ConditionalExpression extends Node {
+  // 节点类型，值为 19，标识这是一个条件表达式节点
   type: NodeTypes.JS_CONDITIONAL_EXPRESSION
+  // 条件测试表达式，对应三元表达式中的 condition 部分
   test: JSChildNode
+  // 条件为真时的表达式，对应三元表达式中的 trueValue 部分
   consequent: JSChildNode
+  // 条件为假时的表达式，对应三元表达式中的 falseValue 部分
   alternate: JSChildNode
+  // 代码生成时是否需要换行，用于格式化输出
   newline: boolean
 }
 
 export interface CacheExpression extends Node {
+  // 节点类型，值为 20，标识这是一个缓存表达式节点
   type: NodeTypes.JS_CACHE_EXPRESSION
+  // 缓存索引，用于在生成的代码中标识缓存位置
   index: number
+  // 要缓存的表达式值，可以是任何 JavaScript 子节点类型
   value: JSChildNode
+  // 是否需要暂停依赖跟踪，用于响应式系统的优化
   needPauseTracking: boolean
+  // 是否在 v-once 指令中，用于特殊处理
   inVOnce: boolean
+  // 是否需要数组展开，用于处理数组类型的缓存值
   needArraySpread: boolean
 }
 

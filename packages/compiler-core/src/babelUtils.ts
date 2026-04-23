@@ -548,6 +548,7 @@ export const TS_NODE_TYPES: string[] = [
   'TSSatisfiesExpression', // foo satisfies T
 ]
 
+// 递归去除TS节点的包装层
 export function unwrapTSNode(node: Node): Node {
   if (TS_NODE_TYPES.includes(node.type)) {
     return unwrapTSNode((node as any).expression)
