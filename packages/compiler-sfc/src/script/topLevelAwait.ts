@@ -34,6 +34,14 @@ import type { ScriptCompileContext } from './context'
  * )
  * ```
  */
+/**
+ * 处理 <script setup> 中的 await 表达式，
+ * 将其转换为使用 withAsyncContext 包装的形式，以确保在异步操作期间正确管理组件实例上下文。
+ * @param ctx 编译上下文
+ * @param node await 表达式的 AST 节点
+ * @param needSemi 是否需要分号
+ * @param isStatement 是否为语句
+ */
 export function processAwait(
   ctx: ScriptCompileContext,
   node: AwaitExpression,
@@ -41,25 +49,32 @@ export function processAwait(
   isStatement: boolean,
 ): void {
   const argumentStart =
+    // node.argument.extra.parenthesized 表示参数是否被括号包围
     node.argument.extra && node.argument.extra.parenthesized
       ? (node.argument.extra.parenStart as number)
       : node.argument.start!
 
   const startOffset = ctx.startOffset!
+
+  // 提取参数内容
   const argumentStr = ctx.descriptor.source.slice(
     argumentStart + startOffset,
     node.argument.end! + startOffset,
   )
 
+  // 检查参数中是否包含嵌套的 await 表达式
   const containsNestedAwait = /\bawait\b/.test(argumentStr)
 
+  // 替换 await 关键字
   ctx.s.overwrite(
     node.start! + startOffset,
     argumentStart + startOffset,
     `${needSemi ? `;` : ``}(\n  ([__temp,__restore] = ${ctx.helper(
       `withAsyncContext`,
+      // 根据是否包含嵌套 await 决定是否添加 async 关键字
     )}(${containsNestedAwait ? `async ` : ``}() => `,
   )
+  // 在表达式末尾添加剩余的包装代码
   ctx.s.appendLeft(
     node.end! + startOffset,
     `)),\n  ${isStatement ? `` : `__temp = `}await __temp,\n  __restore()${

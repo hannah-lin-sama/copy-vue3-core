@@ -47,6 +47,12 @@ export function isLiteralNode(node: Node): boolean {
   return node.type.endsWith('Literal')
 }
 
+/**
+ * 判断节点是否为调用表达式
+ * @param node 节点
+ * @param test 测试函数或字符串
+ * @returns 是否为调用表达式
+ */
 export function isCallOf(
   node: Node | null | undefined,
   test: string | ((id: string) => boolean) | null | undefined,

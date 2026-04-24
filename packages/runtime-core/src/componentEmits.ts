@@ -91,20 +91,30 @@ export type ShortEmitsToObject<E> =
     : E
 
 export type EmitFn<
+  // 表示事件选项的类型
   Options = ObjectEmitsOptions,
+  // 表示事件名称的类型，约束为 Options 的键
   Event extends keyof Options = keyof Options,
 > =
   Options extends Array<infer V>
-    ? (event: V, ...args: any[]) => void
-    : {} extends Options // if the emit is empty object (usually the default value for emit) should be converted to function
-      ? (event: string, ...args: any[]) => void
-      : UnionToIntersection<
+    ? // 触发条件：当 Options 是数组类型时
+      // 事件名称为数组元素类型，参数为任意类型
+      (event: V, ...args: any[]) => void
+    : // 触发条件：当 Options 是空对象时
+      {} extends Options // if the emit is empty object (usually the default value for emit) should be converted to function
+      ? // 事件名称为任意字符串，参数为任意类型
+        (event: string, ...args: any[]) => void
+      : // 触发条件：当 Options 是非空对象时
+        UnionToIntersection<
           {
             [key in Event]: Options[key] extends (...args: infer Args) => any
-              ? (event: key, ...args: Args) => void
-              : Options[key] extends any[]
+              ? // 函数类型
+                (event: key, ...args: Args) => void
+              : // 数组类型
+                Options[key] extends any[]
                 ? (event: key, ...args: Options[key]) => void
-                : (event: key, ...args: any[]) => void
+                : // 其他类型
+                  (event: key, ...args: any[]) => void
           }[Event]
         >
 

@@ -203,11 +203,11 @@ function generateError(
 }
 
 /**
- * 用于根据指定的语言类型和用户配置，解析并返回适合的 Parser 插件数组
- * @param lang
- * @param userPlugins
- * @param dts
- * @returns
+ * 根据脚本语言类型和用户配置，解析并返回适合的 Babel 解析器插件数组
+ * @param lang 脚本语言类型
+ * @param userPlugins 用户提供的 Babel 解析器插件数组（可选）
+ * @param dts 是否为 TypeScript 声明文件模式（默认为 false）
+ * @returns 解析器插件数组
  */
 export function resolveParserPlugins(
   lang: string,
@@ -224,7 +224,7 @@ export function resolveParserPlugins(
         (isArray(p) && p[0] === 'importAttributes'),
     )
   ) {
-    // 添加 importAttributes 插件
+    // 添加 importAttributes 插件，用于支持 ES 模块的导入断言功能
     plugins.push('importAttributes')
   }
   if (lang === 'jsx' || lang === 'tsx' || lang === 'mtsx') {
@@ -243,10 +243,10 @@ export function resolveParserPlugins(
     lang === 'mtsx'
   ) {
     // 添加 typescript 插件
-    // 添加 explicitResourceManagement 插件
+    // 添加 explicitResourceManagement 插件，用于支持 using 声明等新特性
     plugins.push(['typescript', { dts }], 'explicitResourceManagement')
     if (!userPlugins || !userPlugins.includes('decorators')) {
-      // 添加 decorators-legacy 插件
+      // 添加 decorators-legacy 插件,用于支持装饰器语法
       plugins.push('decorators-legacy')
     }
   }

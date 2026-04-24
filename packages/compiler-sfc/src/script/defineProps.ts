@@ -96,6 +96,7 @@ export function processDefineProps(
   }
 
   // handle props destructure
+  // 解构赋值
   if (!isWithDefaults && declId && declId.type === 'ObjectPattern') {
     processPropsDestructure(ctx, declId)
   }

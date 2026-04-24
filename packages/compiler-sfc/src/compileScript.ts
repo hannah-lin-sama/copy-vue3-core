@@ -238,7 +238,7 @@ export function compileScript(
     return scriptSetup
   }
 
-  // 脚本编译上下文
+  // 脚本编译上下文,利用Babel解析脚本AST
   const ctx = new ScriptCompileContext(sfc, options)
 
   // metadata that needs to be returned
@@ -263,10 +263,15 @@ export function compileScript(
   // 普通 <script> 块的结束偏移量（如果存在）
   const scriptEndOffset = script && script.loc.end.offset
 
+  /**
+   * 指定的语句节点及其相关注释提升到代码的开头位置
+   * @param node
+   */
   function hoistNode(node: Statement) {
     const start = node.start! + startOffset
     let end = node.end! + startOffset
     // locate comment
+    // 节点的尾随注释
     if (node.trailingComments && node.trailingComments.length > 0) {
       const lastCommentNode =
         node.trailingComments[node.trailingComments.length - 1]
@@ -274,11 +279,14 @@ export function compileScript(
     }
     // locate the end of whitespace between this statement and the next
     while (end <= source.length) {
+      // 查找下一个非空格字符
       if (!/\s/.test(source.charAt(end))) {
         break
       }
       end++
     }
+
+    // 将节点从当前位置移动到位置 0（代码开头
     ctx.s.move(start, end, 0)
   }
 
@@ -312,6 +320,8 @@ export function compileScript(
       isUsedInTemplate = isImportUsed(local, sfc)
     }
 
+    // 记录用户导入
+    // 存储在 ctx.userImports 中，键为 local（本地名称）
     ctx.userImports[local] = {
       isType,
       imported,
@@ -573,11 +583,11 @@ export function compileScript(
         }
         if (node.declaration) {
           walkDeclaration(
-            'script',
-            node.declaration,
-            scriptBindings,
-            vueImportAliases,
-            hoistStatic,
+            'script', // 表示当前处理的是脚本部分
+            node.declaration, // 要处理的声明节点
+            scriptBindings, // 脚本绑定信息
+            vueImportAliases, // Vue 导入别名信息
+            hoistStatic, // 是否提升静态节点的标志
           )
         }
       } else if (
@@ -619,13 +629,17 @@ export function compileScript(
     if (node.type === 'ExpressionStatement') {
       const expr = unwrapTSNode(node.expression)
       // process `defineProps` and `defineEmit(s)` calls
+      // 处理 defineProps、defineEmits、defineOptions、defineSlots 等函数调用
       if (
         processDefineProps(ctx, expr) ||
         processDefineEmits(ctx, expr) ||
         processDefineOptions(ctx, expr) ||
         processDefineSlots(ctx, expr)
       ) {
+        // 移除 defineProps、defineEmits、defineOptions、defineSlots 等函数调用的表达式
         ctx.s.remove(node.start! + startOffset, node.end! + startOffset)
+
+        // 处理 defineExpose 函数调用
       } else if (processDefineExpose(ctx, expr)) {
         // defineExpose({}) -> expose({})
         const callee = (expr as CallExpression).callee
@@ -635,6 +649,7 @@ export function compileScript(
           '__expose',
         )
       } else {
+        // 处理 defineModel 函数调用
         processDefineModel(ctx, expr)
       }
     }
@@ -644,10 +659,12 @@ export function compileScript(
       let left = total
       let lastNonRemoved: number | undefined
 
+      // 遍历变量声明语句中的每个声明
       for (let i = 0; i < total; i++) {
         const decl = node.declarations[i]
         const init = decl.init && unwrapTSNode(decl.init)
         if (init) {
+          // defineOptions 没有返回值，不能赋值
           if (processDefineOptions(ctx, init)) {
             ctx.error(
               `${DEFINE_OPTIONS}() has no returning value, it cannot be assigned.`,
@@ -657,6 +674,7 @@ export function compileScript(
 
           // defineProps
           const isDefineProps = processDefineProps(ctx, init, decl.id as LVal)
+          // 如果有 props 解构的剩余参数，将其标记为 SETUP_REACTIVE_CONST 类型的绑定
           if (ctx.propsDestructureRestId) {
             setupBindings[ctx.propsDestructureRestId] =
               BindingTypes.SETUP_REACTIVE_CONST
@@ -664,9 +682,13 @@ export function compileScript(
 
           // defineEmits
           const isDefineEmits =
+            // 处理 defineEmits 宏
             !isDefineProps && processDefineEmits(ctx, init, decl.id as LVal)
           !isDefineEmits &&
+            //  处理 defineSlots 宏
+            // decl.id：变量标识符（Identifier），即声明的变量名
             (processDefineSlots(ctx, init, decl.id as LVal) ||
+              // 处理 defineModel 宏
               processDefineModel(ctx, init, decl.id as LVal))
 
           if (
@@ -675,6 +697,7 @@ export function compileScript(
             ctx.propsDestructureDecl
           ) {
             if (left === 1) {
+              // 如果是唯一的声明，移除整个变量声明语句
               ctx.s.remove(node.start! + startOffset, node.end! + startOffset)
             } else {
               let start = decl.start! + startOffset
@@ -683,6 +706,7 @@ export function compileScript(
                 // last one, locate the end of the last one that is not removed
                 // if we arrive at this branch, there must have been a
                 // non-removed decl before us, so lastNonRemoved is non-null.
+                // 否则，移除当前声明及其前后的分隔符
                 start = node.declarations[lastNonRemoved!].end! + startOffset
               } else {
                 // not the last one, locate the start of the next
@@ -692,12 +716,14 @@ export function compileScript(
               left--
             }
           } else if (isDefineEmits) {
+            // 将 defineEmits() 调用替换为 __emit
             ctx.s.overwrite(
               startOffset + init.start!,
               startOffset + init.end!,
               '__emit',
             )
           } else {
+            // 记录为最后一个非移除的声明索引
             lastNonRemoved = i
           }
         }
@@ -737,14 +763,17 @@ export function compileScript(
       const scope: Statement[][] = [scriptSetupAst.body]
       walk(node, {
         enter(child: Node, parent: Node | null) {
+          // 当遇到函数类型节点时，跳过其内部遍历
+          // 原因？函数内部的 await 表达式由函数自身处理，不需要外部遍历器处理
           if (isFunctionType(child)) {
             this.skip()
           }
+          // 当遇到块语句时，将其 body 推入作用域栈
           if (child.type === 'BlockStatement') {
             scope.push(child.body)
           }
           if (child.type === 'AwaitExpression') {
-            hasAwait = true
+            hasAwait = true // 标记为存在 await 表达式
             // if the await expression is an expression statement and
             // - is in the root scope
             // - or is not the first statement in a nested block scope
@@ -752,7 +781,10 @@ export function compileScript(
             const currentScope = scope[scope.length - 1]
             const needsSemi = currentScope.some((n, i) => {
               return (
+                // 在根作用域 (scope.length === 1)
+                // 不是嵌套块作用域的第一条语句 (i > 0)
                 (scope.length === 1 || i > 0) &&
+                // 当前 await 表达式是一个表达式语句
                 n.type === 'ExpressionStatement' &&
                 n.start === child.start
               )
@@ -771,6 +803,7 @@ export function compileScript(
       })
     }
 
+    // 检查 <script setup> 中是否包含 ES 模块导出语句。如果检测到导出语句，会抛出编译错误
     if (
       (node.type === 'ExportNamedDeclaration' && node.exportKind !== 'type') ||
       node.type === 'ExportAllDeclaration' ||
@@ -787,12 +820,18 @@ export function compileScript(
     if (ctx.isTS) {
       // move all Type declarations to outer scope
       if (
+        // TypeScript 类型节点：如 TSInterfaceDeclaration（接口）、TSTypeAliasDeclaration（类型别名）等
         node.type.startsWith('TS') ||
+        // 类型导出，如 export type { User }
         (node.type === 'ExportNamedDeclaration' &&
           node.exportKind === 'type') ||
+        // 声明式变量，如 declare const API_URL: string
         (node.type === 'VariableDeclaration' && node.declare)
       ) {
+        // 特殊处理：排除枚举
+        // 原因：TypeScript 枚举在编译后会生成运行时代码（JavaScript 对象），不是纯类型声明
         if (node.type !== 'TSEnumDeclaration') {
+          // 将符合条件的类型声明节点移动到代码顶部
           hoistNode(node)
         }
       }
@@ -819,6 +858,7 @@ export function compileScript(
   }
 
   // 5. remove non-script content
+  // 移除非脚本内容，如模板、样式等
   if (script) {
     if (startOffset < scriptStartOffset!) {
       // <script setup> before <script>
@@ -963,18 +1003,25 @@ export function compileScript(
   }
 
   // inject temp variables for async context preservation
+  // 处理组件脚本中的异步操作
   if (hasAwait) {
     const any = ctx.isTS ? `: any` : ``
     ctx.s.prependLeft(startOffset, `\nlet __temp${any}, __restore${any}\n`)
   }
 
   const destructureElements =
+    // ctx.hasDefineExposeCall：组件使用了 defineExpose 宏
+    // !options.inlineTemplate：模板不是内联的（即使用单独的 <template> 块）
     ctx.hasDefineExposeCall || !options.inlineTemplate
       ? [`expose: __expose`]
       : []
+
+  // 组件使用了 defineEmits 宏
   if (ctx.emitDecl) {
     destructureElements.push(`emit: __emit`)
   }
+  // 如果解构元素数组不为空，将其作为对象解构添加到 args 中
+  // 生成的代码形式为：, { expose: __expose, emit: __emit }
   if (destructureElements.length) {
     args += `, { ${destructureElements.join(', ')} }`
   }
@@ -1106,6 +1153,7 @@ export function compileScript(
     : `export default`
 
   let runtimeOptions = ``
+
   if (!ctx.hasDefaultExportName && filename && filename !== DEFAULT_FILENAME) {
     const match = filename.match(/([^/\\]+)\.\w+$/)
     if (match) {
@@ -1177,6 +1225,8 @@ export function compileScript(
   if (ctx.helperImports.size > 0) {
     const runtimeModuleName =
       options.templateOptions?.compilerOptions?.runtimeModuleName
+
+    // 生成导入语句
     const importSrc = runtimeModuleName
       ? JSON.stringify(runtimeModuleName)
       : `'vue'`
@@ -1187,10 +1237,12 @@ export function compileScript(
     )
   }
 
+  // 获取编译后的代码内容
   const content = ctx.s.toString()
   let map =
     options.sourceMap !== false
-      ? (ctx.s.generateMap({
+      ? // 生成 source map
+        (ctx.s.generateMap({
           source: filename,
           hires: true,
           includeContent: true,
@@ -1201,6 +1253,7 @@ export function compileScript(
     const offset = content.indexOf(returned)
     const templateLineOffset =
       content.slice(0, offset).split(/\r?\n/).length - 1
+    // 合并 source map
     map = mergeSourceMaps(map, templateMap, templateLineOffset)
   }
   return {
@@ -1215,6 +1268,12 @@ export function compileScript(
   }
 }
 
+/**
+ * 将变量名与其绑定类型注册到绑定记录中
+ * @param bindings 存储变量名到绑定类型的映射对象
+ * @param node 变量声明节点
+ * @param type 变量的绑定类型
+ */
 function registerBinding(
   bindings: Record<string, BindingTypes>,
   node: Identifier,
@@ -1290,6 +1349,7 @@ function walkDeclaration(
             ? BindingTypes.SETUP_REACTIVE_CONST
             : BindingTypes.SETUP_CONST
         } else if (isConst) {
+          // 检查变量的初始值 init 是否是特定函数的调用
           if (
             isCallOf(
               init,
@@ -1355,15 +1415,20 @@ function walkObjectPattern(
 ) {
   for (const p of node.properties) {
     if (p.type === 'ObjectProperty') {
+      // 简写形式：如 const { x } = ...（key 和 value 相同）
       if (p.key.type === 'Identifier' && p.key === p.value) {
         // shorthand: const { x } = ...
         const type = isDefineCall
-          ? BindingTypes.SETUP_CONST
+          ? // 来自 define 调用的常量，如 defineProps、defineEmits 的返回值
+            BindingTypes.SETUP_CONST
           : isConst
-            ? BindingTypes.SETUP_MAYBE_REF
-            : BindingTypes.SETUP_LET
+            ? // const 声明的变量，可能是 ref
+              BindingTypes.SETUP_MAYBE_REF
+            : // let 声明的变量
+              BindingTypes.SETUP_LET
         registerBinding(bindings, p.key, type)
       } else {
+        // 调用 walkPattern 处理 p.value
         walkPattern(p.value, bindings, isConst, isDefineCall)
       }
     } else {
@@ -1386,6 +1451,13 @@ function walkArrayPattern(
   }
 }
 
+/**
+ * 遍历和分析不同类型的模式节点（如标识符、对象解构、数组解构等
+ * @param node
+ * @param bindings
+ * @param isConst
+ * @param isDefineCall
+ */
 function walkPattern(
   node: Node,
   bindings: Record<string, BindingTypes>,
@@ -1449,17 +1521,26 @@ function canNeverBeRef(node: Node, userReactiveImport?: string): boolean {
   }
 }
 
+/**
+ * 判断节点是否为静态节点
+ * @param node 要判断的节点
+ * @returns
+ */
 function isStaticNode(node: Node): boolean {
+  // 先去TS节点的包装
   node = unwrapTSNode(node)
 
   switch (node.type) {
+    // 一元表达式
     case 'UnaryExpression': // void 0, !true
       return isStaticNode(node.argument)
 
+    // 逻辑表达式、二元表达式
     case 'LogicalExpression': // 1 > 2
     case 'BinaryExpression': // 1 + 2
       return isStaticNode(node.left) && isStaticNode(node.right)
 
+    // 条件表达式
     case 'ConditionalExpression': {
       // 1 ? 2 : 3
       return (
@@ -1469,13 +1550,16 @@ function isStaticNode(node: Node): boolean {
       )
     }
 
+    // 序列表达式、模板字面值
     case 'SequenceExpression': // (1, 2)
     case 'TemplateLiteral': // `foo${1}`
       return node.expressions.every(expr => isStaticNode(expr))
 
+    // 括号表达式
     case 'ParenthesizedExpression': // (1)
       return isStaticNode(node.expression)
 
+    // 字面值
     case 'StringLiteral':
     case 'NumericLiteral':
     case 'BooleanLiteral':
@@ -1486,23 +1570,41 @@ function isStaticNode(node: Node): boolean {
   return false
 }
 
+/**
+ * 合并脚本部分和模板部分的源映射（source map）
+ * 源映射是一种用于将编译后代码映射回原始源代码的技术，便于调试。
+ * @param scriptMap 脚本部分的源映射对象
+ * @param templateMap 模板部分的源映射对象
+ * @param templateLineOffset 模板部分的行偏移量，用于调整映射关系
+ * @returns 合并后的源映射对象
+ */
 export function mergeSourceMaps(
   scriptMap: RawSourceMap,
   templateMap: RawSourceMap,
   templateLineOffset: number,
 ): RawSourceMap {
+  // 创建一个新的 SourceMapGenerator 实例，用于生成合并后的源映射
   const generator = new SourceMapGenerator()
+
   const addMapping = (map: RawSourceMap, lineOffset = 0) => {
+    // 创建消费者：为每个源映射创建一个 SourceMapConsumer
     const consumer = new SourceMapConsumer(map)
+
     ;(consumer as any).sources.forEach((sourceFile: string) => {
+      // 将源映射中的所有源文件添加到生成器中
       ;(generator as any)._sources.add(sourceFile)
+
       const sourceContent = consumer.sourceContentFor(sourceFile)
+
       if (sourceContent != null) {
+        // 如果源文件有内容，将其设置到生成器中
         generator.setSourceContent(sourceFile, sourceContent)
       }
     })
     consumer.eachMapping(m => {
       if (m.originalLine == null) return
+
+      // 添加映射：遍历源映射中的每个映射，调整行偏移量后添加到生成器中
       generator.addMapping({
         generated: {
           line: m.generatedLine + lineOffset,
@@ -1518,9 +1620,13 @@ export function mergeSourceMaps(
     })
   }
 
+  // 先添加脚本部分的源映射（无偏移）
   addMapping(scriptMap)
+  // 再添加模板部分的源映射（带行偏移）
   addMapping(templateMap, templateLineOffset)
   ;(generator as any)._sourceRoot = scriptMap.sourceRoot
   ;(generator as any)._file = scriptMap.file
+
+  // 将生成器转换为 JSON 格式并返回
   return (generator as any).toJSON()
 }

@@ -73,14 +73,18 @@ const warnRuntimeUsage = (method: string) =>
  * output and should **not** be actually called at runtime.
  */
 // overload 1: runtime props w/ array
+// 字符串数组版本
 export function defineProps<PropNames extends string = string>(
+  // 一个字符串数组，包含要定义的 prop 名称
   props: PropNames[],
 ): Prettify<Readonly<{ [key in PropNames]?: any }>>
 // overload 2: runtime props w/ object
+// 对象版本
 export function defineProps<
   PP extends ComponentObjectPropsOptions = ComponentObjectPropsOptions,
 >(props: PP): Prettify<Readonly<ExtractPropTypes<PP>>>
 // overload 3: typed-based declaration
+// 泛型版本
 export function defineProps<TypeProps>(): DefineProps<
   LooseRequired<TypeProps>,
   BooleanKey<TypeProps>
@@ -132,12 +136,17 @@ type BooleanKey<T, K extends keyof T = keyof T> = K extends any
  * @see {@link https://vuejs.org/api/sfc-script-setup.html#defineprops-defineemits}
  */
 // overload 1: runtime emits w/ array
+// 字符串数组版本
 export function defineEmits<EE extends string = string>(
   emitOptions: EE[],
 ): EmitFn<EE[]>
+// overload 2: runtime emits w/ object
+// 对象版本
 export function defineEmits<E extends EmitsOptions = EmitsOptions>(
   emitOptions: E,
 ): EmitFn<E>
+// overload 3: typed-based declaration
+// 泛型版本
 export function defineEmits<T extends ComponentTypeEmits>(): T extends (
   ...args: any[]
 ) => any
@@ -157,6 +166,8 @@ type RecordToUnion<T extends Record<string, any>> = T[keyof T]
 
 type ShortEmits<T extends Record<string, any>> = UnionToIntersection<
   RecordToUnion<{
+    // 遍历 T 的每个键 K
+    // 为每个事件 K 创建一个函数类型
     [K in keyof T]: (evt: K, ...args: T[K]) => void
   }>
 >
@@ -240,10 +251,12 @@ export function defineSlots<
   return null as any
 }
 
+// ModelRef 是一个交叉类型（&）
 export type ModelRef<T, M extends PropertyKey = string, G = T, S = T> = Ref<
-  G,
-  S
+  G, // G 表示 getter 返回值的类型
+  S // 表示 setter 接受值的类型
 > &
+  // 一个元组类型，包含两个元素
   [ModelRef<T, M, G, S>, Record<M, true | undefined>]
 
 export type DefineModelOptions<T = any, G = T, S = T> = {
@@ -286,15 +299,26 @@ export type DefineModelOptions<T = any, G = T, S = T> = {
  */
 export function defineModel<T, M extends PropertyKey = string, G = T, S = T>(
   options: ({ default: any } | { required: true }) &
+    // type：属性类型
+    // validator：验证函数
     PropOptions<T> &
+    // get：自定义 getter 函数
+    // set：自定义 setter 函数
     DefineModelOptions<T, G, S>,
+
+  // T 模型值的类型
+  // M 模型名称的类型，默认为字符串
+  // G getter 返回值的类型，默认为 T
+  // S 接受值的类型，默认为 T
 ): ModelRef<T, M, G, S>
 
 export function defineModel<T, M extends PropertyKey = string, G = T, S = T>(
   options?: PropOptions<T> & DefineModelOptions<T, G, S>,
 ): ModelRef<T | undefined, M, G | undefined, S | undefined>
 
+// 带名称参数版本
 export function defineModel<T, M extends PropertyKey = string, G = T, S = T>(
+  // 模型的名称，用于指定 v-model 的绑定名称
   name: string,
   options: ({ default: any } | { required: true }) &
     PropOptions<T> &
@@ -504,15 +528,19 @@ export function createPropsRestProxy(
  * ```
  * @internal
  */
+// 在异步操作期间保存和恢复组件实例上下文
 export function withAsyncContext(getAwaitable: () => any): [any, () => void] {
   const ctx = getCurrentInstance()!
+  // 在开发模式下，如果没有活跃实例，发出警告
   if (__DEV__ && !ctx) {
     warn(
       `withAsyncContext called without active current instance. ` +
         `This is likely a bug.`,
     )
   }
+  // 执行异步操作
   let awaitable = getAwaitable()
+  // 清除当前全局的组件实例
   unsetCurrentInstance()
 
   // Never restore a captured "prev" instance here: in concurrent async setup
@@ -520,11 +548,14 @@ export function withAsyncContext(getAwaitable: () => any): [any, () => void] {
   // We only need to balance ctx.scope.on() from setCurrentInstance(ctx),
   // then clear global currentInstance for user microtasks.
   const cleanup = () => {
+    // 检查当前实例是否已被其他组件占用
+    // 如果是，关闭当前组件的作用域
     if (getCurrentInstance() !== ctx) ctx.scope.off()
     unsetCurrentInstance()
   }
 
   if (isPromise(awaitable)) {
+    // 处理 Promise 错误
     awaitable = awaitable.catch(e => {
       setCurrentInstance(ctx)
       // Defer cleanup so the async function's catch continuation
@@ -536,6 +567,7 @@ export function withAsyncContext(getAwaitable: () => any): [any, () => void] {
   return [
     awaitable,
     () => {
+      // 恢复组件实例上下文
       setCurrentInstance(ctx)
       // Keep instance for the current continuation, then cleanup.
       Promise.resolve().then(cleanup)

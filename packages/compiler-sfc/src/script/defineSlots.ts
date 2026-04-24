@@ -25,6 +25,7 @@ export function processDefineSlots(
 
   // 转换为 useSlots 辅助函数
   if (declId) {
+    // 将 defineSlots() 调用转换为 useSlots() 调用
     ctx.s.overwrite(
       ctx.startOffset! + node.start!,
       ctx.startOffset! + node.end!,

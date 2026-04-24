@@ -123,24 +123,36 @@ export function walkIdentifiers(
   })
 }
 
+/**
+ * 检查标识符是否被引用
+ * @param id 要检查的标识符节点
+ * @param parent 父节点
+ * @param parentStack 父节点栈
+ * @returns 是否被引用
+ */
 export function isReferencedIdentifier(
   id: Identifier,
   parent: Node | null,
   parentStack: Node[],
 ): boolean {
+  // 在浏览器环境中直接返回 false
+  // 因为该函数主要用于编译时分析，在浏览器运行时不需要
   if (__BROWSER__) {
     return false
   }
 
+  // 如果标识符没有父节点，认为它被引用
   if (!parent) {
     return true
   }
 
   // is a special keyword but parsed as identifier
+  // 如果标识符是 arguments，虽然它被解析为标识符，但它是一个特殊关键字，返回 false
   if (id.name === 'arguments') {
     return false
   }
 
+  // 调用 isReferenced 函数（来自 babel-parser）检查标识符是否被引用
   if (isReferenced(id, parent, parentStack[parentStack.length - 2])) {
     return true
   }
@@ -150,10 +162,13 @@ export function isReferencedIdentifier(
   switch (parent.type) {
     case 'AssignmentExpression':
     case 'AssignmentPattern':
+      // 赋值表达式或模式赋值，标识符被引用
       return true
     case 'ObjectProperty':
+      // 对象属性：当标识符不是属性键且在解构赋值中时，认为它被引用
       return parent.key !== id && isInDestructureAssignment(parent, parentStack)
     case 'ArrayPattern':
+      // 数组模式：当在解构赋值中时，认为它被引用
       return isInDestructureAssignment(parent, parentStack)
   }
 
@@ -283,12 +298,19 @@ function walkSwitchStatement(
   }
 }
 
+/**
+ * 从 AST 节点中提取所有的标识符（Identifier）
+ * @param param
+ * @param nodes
+ * @returns
+ */
 export function extractIdentifiers(
   param: Node,
   nodes: Identifier[] = [],
 ): Identifier[] {
   switch (param.type) {
     case 'Identifier':
+      // 当节点类型为 Identifier 时，直接将其添加到 nodes 数组中
       nodes.push(param)
       break
 

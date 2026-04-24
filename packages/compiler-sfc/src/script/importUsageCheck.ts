@@ -35,6 +35,12 @@ function resolveTemplateUsedIdentifiers(sfc: SFCDescriptor): Set<string> {
   return resolveTemplateAnalysisResult(sfc).usedIds!
 }
 
+/**
+ * 分析模板内容并提取关键标识符
+ * @param sfc SFC 描述符对象，包含模板内容和 AST
+ * @param collectUsedIds 是否收集使用的标识符，默认为 true
+ * @returns
+ */
 function resolveTemplateAnalysisResult(
   sfc: SFCDescriptor,
   collectUsedIds = true,
@@ -53,6 +59,7 @@ function resolveTemplateAnalysisResult(
   const ids = collectUsedIds ? new Set<string>() : undefined
   const vModelIds = new Set<string>()
 
+  // 历模板 AST 的所有子节点
   ast!.children.forEach(walk)
 
   function walk(node: TemplateChildNode) {
@@ -123,6 +130,8 @@ function resolveTemplateAnalysisResult(
         }
         node.children.forEach(walk)
         break
+
+      // 处理插值节点
       case NodeTypes.INTERPOLATION:
         if (ids) extractIdentifiers(ids, node.content)
         break
