@@ -750,6 +750,7 @@ export function compileScript(
     }
 
     // hoist literal constants
+    // 如果是静态提升且所有绑定都是字面量常量，提升节点
     if (hoistStatic && isAllLiteral) {
       hoistNode(node)
     }
@@ -955,7 +956,9 @@ export function compileScript(
     // no need to do this when targeting SSR
     !options.templateOptions?.ssr
   ) {
+    // 添加 CSS 变量处理的辅助函数
     ctx.helperImports.add(CSS_VARS_HELPER)
+    // 添加 unref 函数，用于处理可能的 ref 类型
     ctx.helperImports.add('unref')
     ctx.s.prependLeft(
       startOffset,
@@ -1051,6 +1054,7 @@ export function compileScript(
     }
     returned = `{ `
     for (const key in allBindings) {
+      // 如果绑定是 true，且不是 Vue 导入，也不是 Vue 组件导入
       if (
         allBindings[key] === true &&
         ctx.userImports[key].source !== 'vue' &&
@@ -1059,6 +1063,8 @@ export function compileScript(
         // generate getter for import bindings
         // skip vue imports since we know they will never change
         returned += `get ${key}() { return ${key} }, `
+
+        // 如果绑定是 let 类型，添加 setter
       } else if (ctx.bindingMetadata[key] === BindingTypes.SETUP_LET) {
         // local let binding, also add setter
         const setArg = key === 'v' ? `_v` : `v`
@@ -1069,6 +1075,7 @@ export function compileScript(
         returned += `${key}, `
       }
     }
+    // 将字符串 returned 末尾的 ,（逗号+空格）替换为空字符串
     returned = returned.replace(/, $/, '') + ` }`
   } else {
     // inline mode
@@ -1148,9 +1155,12 @@ export function compileScript(
   }
 
   // 10. finalize default export
+  // 最终生成组件
   const genDefaultAs = options.genDefaultAs
-    ? `const ${options.genDefaultAs} =`
-    : `export default`
+    ? // 如果指定了 genDefaultAs 选项，使用该选项生成组件
+      `const ${options.genDefaultAs} =`
+    : // 否则，使用默认导出
+      `export default`
 
   let runtimeOptions = ``
 
@@ -1190,6 +1200,7 @@ export function compileScript(
     const def =
       (defaultExport ? `\n  ...${normalScriptDefaultVar},` : ``) +
       (definedOptions ? `\n  ...${definedOptions},` : '')
+
     ctx.s.prependLeft(
       startOffset,
       `\n${genDefaultAs} /*@__PURE__*/${ctx.helper(
@@ -1391,8 +1402,10 @@ function walkDeclaration(
       member => !member.initializer || isStaticNode(member.initializer),
     )
     bindings[node.id!.name] = isAllLiteral
-      ? BindingTypes.LITERAL_CONST
-      : BindingTypes.SETUP_CONST
+      ? // 如果所有成员都是字面量常量，绑定类型为 L面量常量
+        BindingTypes.LITERAL_CONST
+      : // 否则，绑定类型为 setup 常量
+        BindingTypes.SETUP_CONST
 
     // 3、 函数声明、类声明
   } else if (

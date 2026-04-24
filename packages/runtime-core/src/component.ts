@@ -895,6 +895,7 @@ function setupStatefulComponent(
   // 1. create public instance / render proxy
   instance.proxy = new Proxy(instance.ctx, PublicInstanceProxyHandlers)
   if (__DEV__) {
+    // 开发环境下，将 props 中的属性暴露到渲染上下文中
     exposePropsOnRenderContext(instance)
   }
   // 2. call setup()
@@ -988,6 +989,7 @@ export function handleSetupResult(
     }
     instance.setupState = proxyRefs(setupResult)
     if (__DEV__) {
+      // 开发环境下，将 setupState 中的属性暴露到渲染上下文中
       exposeSetupStateOnRenderContext(instance)
     }
   } else if (__DEV__ && setupResult !== undefined) {

@@ -709,7 +709,9 @@ export function exposePropsOnRenderContext(
     propsOptions: [propsOptions],
   } = instance
   if (propsOptions) {
+    // 遍历 propsOptions 中的属性
     Object.keys(propsOptions).forEach(key => {
+      // 暴露 props 中的属性到渲染上下文
       Object.defineProperty(ctx, key, {
         enumerable: true,
         configurable: true,
@@ -721,13 +723,17 @@ export function exposePropsOnRenderContext(
 }
 
 // dev only
+// 将组件的 setupState 中的属性暴露到渲染上下文中。它确保在模板中可以直接访问 setup 函数返回的状态
 export function exposeSetupStateOnRenderContext(
   instance: ComponentInternalInstance,
 ): void {
   const { ctx, setupState } = instance
   Object.keys(toRaw(setupState)).forEach(key => {
+    // 不是script setup 中暴露的属性
     if (!setupState.__isScriptSetup) {
+      // 检查属性名是否以保留前缀（$ 或 _）开头
       if (isReservedPrefix(key[0])) {
+        // 发出警告并跳过该属性
         warn(
           `setup() return property ${JSON.stringify(
             key,
@@ -739,6 +745,7 @@ export function exposeSetupStateOnRenderContext(
       Object.defineProperty(ctx, key, {
         enumerable: true,
         configurable: true,
+        // 只定义 getter，setter 设为 NOOP（空操作），意味着这些属性是只读的
         get: () => setupState[key],
         set: NOOP,
       })

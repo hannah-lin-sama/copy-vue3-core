@@ -163,6 +163,14 @@ export const cssVarsPlugin: PluginCreator<CssVarsPluginOptions> = opts => {
 }
 cssVarsPlugin.postcss = true
 
+/**
+ * 生成 CSS 变量处理的代码
+ * @param vars CSS 变量列表
+ * @param bindings 绑定元数据
+ * @param id 组件 ID
+ * @param isProd 是否为生产环境
+ * @returns
+ */
 export function genCssVarsCode(
   vars: string[],
   bindings: BindingMetadata,
