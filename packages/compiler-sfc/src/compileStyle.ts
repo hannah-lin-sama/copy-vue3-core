@@ -86,13 +86,18 @@ export function compileStyleAsync(
   }) as Promise<SFCStyleCompileResults>
 }
 
+/**
+ * 将 SFC 中的样式代码进行预处理、转换和编译，最终生成可用于生产环境的 CSS 代码。
+ * @param options
+ * @returns
+ */
 export function doCompileStyle(
   options: SFCAsyncStyleCompileOptions,
 ): SFCStyleCompileResults | Promise<SFCStyleCompileResults> {
   const {
-    filename,
-    id,
-    scoped = false,
+    filename, // 样式文件的路径
+    id, // 样式文件的唯一标识符
+    scoped = false, // 是否开启作用域样式
     trim = true,
     isProd = false,
     modules = false,
@@ -101,7 +106,10 @@ export function doCompileStyle(
     postcssOptions,
     postcssPlugins,
   } = options
+
+  // 检查是否指定了预处理器语言（如 scss、less、stylus 等）
   const preprocessor = preprocessLang && processors[preprocessLang]
+  // 如果指定了，从 processors 对象中获取对应的预处理器
   const preProcessedSource = preprocessor && preprocess(options, preprocessor)
   const map = preProcessedSource
     ? preProcessedSource.map
@@ -112,20 +120,25 @@ export function doCompileStyle(
   const longId = `data-v-${shortId}`
 
   const plugins = (postcssPlugins || []).slice()
+  // 添加 CSS 变量插件
   plugins.unshift(cssVarsPlugin({ id: shortId, isProd }))
+  // 添加代码裁剪插件（如果需要）
   if (trim) {
     plugins.push(trimPlugin())
   }
+  // 添加 scoped 样式插件（如果需要）
   if (scoped) {
     plugins.push(scopedPlugin(longId))
   }
   let cssModules: Record<string, string> | undefined
   if (modules) {
+    // 检查环境限制（浏览器环境不支持）
     if (__GLOBAL__ || __ESM_BROWSER__) {
       throw new Error(
         '[@vue/compiler-sfc] `modules` option is not supported in the browser build.',
       )
     }
+    // 检查是否为异步模式（CSS 模块只能在异步模式下使用
     if (!options.isAsync) {
       throw new Error(
         '[@vue/compiler-sfc] `modules` option can only be used with compileStyleAsync().',
@@ -141,6 +154,7 @@ export function doCompileStyle(
     )
   }
 
+  // 配置 PostCSS 选项
   const postCSSOptions: ProcessOptions = {
     ...postcssOptions,
     to: filename,
@@ -180,17 +194,19 @@ export function doCompileStyle(
   }
 
   try {
+    // 使用 PostCSS 处理样式代码
     result = postcss(plugins).process(source, postCSSOptions)
 
     // In async mode, return a promise.
     if (options.isAsync) {
       return result
         .then(result => ({
-          code: result.css || '',
-          map: result.map && result.map.toJSON(),
-          errors,
-          modules: cssModules,
-          rawResult: result,
+          code: result.css || '', // 编译后的 CSS 代码
+          map: result.map && result.map.toJSON(), // 源映射文件
+          errors, // 编译过程中遇到的错误
+          modules: cssModules, // CSS 模块
+          rawResult: result, // 原始 PostCSS 结果
+          // 依赖项（如其他样式文件）
           dependencies: recordPlainCssDependencies(result.messages),
         }))
         .catch(error => ({
@@ -202,6 +218,7 @@ export function doCompileStyle(
         }))
     }
 
+    // 记录依赖项（如其他样式文件）
     recordPlainCssDependencies(result.messages)
     // force synchronous transform (we know we only have sync plugins)
     code = result.css

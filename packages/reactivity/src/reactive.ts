@@ -23,12 +23,19 @@ export interface Target {
   [ReactiveFlags.RAW]?: any
 }
 
+// 响应式对象映射表，用于存储目标对象与响应式对象的映射关系
 export const reactiveMap: WeakMap<Target, any> = new WeakMap<Target, any>()
+
+// 浅层响应式对象映射表，用于存储目标对象与浅层响应式对象的映射关系
 export const shallowReactiveMap: WeakMap<Target, any> = new WeakMap<
   Target,
   any
 >()
+
+// 只读响应式对象映射表，用于存储目标对象与只读响应式对象的映射关系
 export const readonlyMap: WeakMap<Target, any> = new WeakMap<Target, any>()
+
+// 浅层只读响应式对象映射表，用于存储目标对象与浅层只读响应式对象的映射关系
 export const shallowReadonlyMap: WeakMap<Target, any> = new WeakMap<
   Target,
   any
@@ -44,12 +51,12 @@ function targetTypeMap(rawType: string) {
   switch (rawType) {
     case 'Object':
     case 'Array':
-      return TargetType.COMMON
+      return TargetType.COMMON // 普通对象或数组
     case 'Map':
     case 'Set':
     case 'WeakMap':
     case 'WeakSet':
-      return TargetType.COLLECTION
+      return TargetType.COLLECTION // 集合对象
     default:
       return TargetType.INVALID
   }
@@ -96,11 +103,11 @@ export function reactive(target: object) {
     return target
   }
   return createReactiveObject(
-    target,
-    false,
-    mutableHandlers,
-    mutableCollectionHandlers,
-    reactiveMap,
+    target, // 目标对象
+    false, // 非浅层响应式
+    mutableHandlers, // 响应式处理函数
+    mutableCollectionHandlers, // 集合响应式处理函数
+    reactiveMap, // 响应式对象映射表
   )
 }
 
@@ -210,7 +217,7 @@ export function readonly<T extends object>(
 ): DeepReadonly<UnwrapNestedRefs<T>> {
   return createReactiveObject(
     target,
-    true,
+    true, // 只读的
     readonlyHandlers,
     readonlyCollectionHandlers,
     readonlyMap,
@@ -251,7 +258,7 @@ export function readonly<T extends object>(
 export function shallowReadonly<T extends object>(target: T): Readonly<T> {
   return createReactiveObject(
     target,
-    true,
+    true, // 只读的
     shallowReadonlyHandlers,
     shallowReadonlyCollectionHandlers,
     shallowReadonlyMap,
@@ -289,14 +296,18 @@ function createReactiveObject(
     return target
   }
   // target already has corresponding Proxy
+  // 如果目标对象已经存在对应的代理对象，直接返回
   const existingProxy = proxyMap.get(target)
   if (existingProxy) {
     return existingProxy
   }
+
+  // 创建代理对象
   const proxy = new Proxy(
     target,
     targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers,
   )
+  // 将代理对象与原始对象关联起来
   proxyMap.set(target, proxy)
   return proxy
 }

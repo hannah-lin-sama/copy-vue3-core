@@ -53,6 +53,13 @@ export interface WatchOptions<Immediate = boolean> extends WatchEffectOptions {
 }
 
 // Simple effect.
+/**
+ * 监听 effect 函数的执行结果
+ * 微任务队列中执行（DOM 更新前）
+ * @param effect 要监听的 effect 函数
+ * @param options 监听选项
+ * @returns 监听句柄
+ */
 export function watchEffect(
   effect: WatchEffect,
   options?: WatchEffectOptions,
@@ -60,6 +67,12 @@ export function watchEffect(
   return doWatch(effect, null, options)
 }
 
+/**
+ * 创建一个在 DOM 更新后执行的副作用函数
+ * @param effect
+ * @param options
+ * @returns
+ */
 export function watchPostEffect(
   effect: WatchEffect,
   options?: DebuggerOptions,
@@ -73,6 +86,13 @@ export function watchPostEffect(
   )
 }
 
+/**
+ * 创建一个同步执行的副作用函数
+ * 会在依赖变化时立即同步执行副作用，而不是在微任务队列中延迟执行
+ * @param effect
+ * @param options
+ * @returns
+ */
 export function watchSyncEffect(
   effect: WatchEffect,
   options?: DebuggerOptions,
@@ -176,7 +196,11 @@ function doWatch(
   if (__DEV__) baseWatchOptions.onWarn = warn
 
   // immediate watcher or watchEffect
+  // 立即执行的条件：
+  // - 有回调函数 && immediate 为 true
+  // - 无回调函数 && flush 不为 'post'
   const runsImmediately = (cb && immediate) || (!cb && flush !== 'post')
+
   let ssrCleanup: (() => void)[] | undefined
   if (__SSR__ && isInSSRComponentSetup) {
     if (flush === 'sync') {
@@ -192,22 +216,30 @@ function doWatch(
   }
 
   const instance = currentInstance
+
+  // options配置
   baseWatchOptions.call = (fn, type, args) =>
     callWithAsyncErrorHandling(fn, instance, type, args)
 
-  // scheduler
+  // scheduler 调度器设置
   let isPre = false
   if (flush === 'post') {
+    // 执行时机：DOM 更新后执行
+    // 调度器：使用 queuePostRenderEffect 将 job 加入到 DOM 更新后的执行队列
     baseWatchOptions.scheduler = job => {
       queuePostRenderEffect(job, instance && instance.suspense)
     }
+
+    // 执行时机：DOM 更新前执行（默认行为）
   } else if (flush !== 'sync') {
     // default: 'pre'
     isPre = true
     baseWatchOptions.scheduler = (job, isFirstRun) => {
       if (isFirstRun) {
+        // 首次执行（isFirstRun）：直接执行 job
         job()
       } else {
+        // 使用 queueJob 将 job 加入到微任务队列
         queueJob(job)
       }
     }
@@ -217,10 +249,11 @@ function doWatch(
     // important: mark the job as a watcher callback so that scheduler knows
     // it is allowed to self-trigger (#1727)
     if (cb) {
-      job.flags! |= SchedulerJobFlags.ALLOW_RECURSE
+      job.flags! |= SchedulerJobFlags.ALLOW_RECURSE // 允许自触发
     }
     if (isPre) {
-      job.flags! |= SchedulerJobFlags.PRE
+      job.flags! |= SchedulerJobFlags.PRE // 在 DOM 更新前执行
+      // 关联组件实例
       if (instance) {
         job.id = instance.uid
         ;(job as SchedulerJob).i = instance

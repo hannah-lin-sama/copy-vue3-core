@@ -45,6 +45,8 @@ export interface Ref<T = any, S = T> {
 export function isRef<T>(r: Ref<T> | unknown): r is Ref<T>
 /*@__NO_SIDE_EFFECTS__*/
 export function isRef(r: any): r is Ref {
+  // 检查值是否为 ref 对象
+  // ref 对象的标志是 ReactiveFlags.IS_REF 为 true
   return r ? r[ReactiveFlags.IS_REF] === true : false
 }
 
@@ -101,9 +103,12 @@ export function shallowRef(value?: unknown) {
 }
 
 function createRef(rawValue: unknown, shallow: boolean) {
+  // 如果原始值已经是 ref 对象，直接返回
   if (isRef(rawValue)) {
     return rawValue
   }
+  // 否则，创建一个新的 RefImpl 实例
+  // 并将原始值和是否浅层传递给构造函数
   return new RefImpl(rawValue, shallow)
 }
 
@@ -120,12 +125,15 @@ class RefImpl<T = any> {
   public readonly [ReactiveFlags.IS_SHALLOW]: boolean = false
 
   constructor(value: T, isShallow: boolean) {
+    // 初始化原始值和值
     this._rawValue = isShallow ? value : toRaw(value)
     this._value = isShallow ? value : toReactive(value)
+    // 标记是否浅层
     this[ReactiveFlags.IS_SHALLOW] = isShallow
   }
 
   get value() {
+    // 记录依赖追踪信息
     if (__DEV__) {
       this.dep.track({
         target: this,
@@ -133,6 +141,7 @@ class RefImpl<T = any> {
         key: 'value',
       })
     } else {
+      // 收集依赖
       this.dep.track()
     }
     return this._value
@@ -140,11 +149,17 @@ class RefImpl<T = any> {
 
   set value(newValue) {
     const oldValue = this._rawValue
+
+    // 判断是否使用直接值
+    // 如果是浅层 ref 、新值是浅层的、新值是只读的
     const useDirectValue =
       this[ReactiveFlags.IS_SHALLOW] ||
       isShallow(newValue) ||
       isReadonly(newValue)
+
     newValue = useDirectValue ? newValue : toRaw(newValue)
+
+    // 如果新值与旧值不同
     if (hasChanged(newValue, oldValue)) {
       this._rawValue = newValue
       this._value = useDirectValue ? newValue : toReactive(newValue)
@@ -157,6 +172,7 @@ class RefImpl<T = any> {
           oldValue,
         })
       } else {
+        // 触发依赖更新（dep.trigger()）
         this.dep.trigger()
       }
     }
@@ -229,6 +245,8 @@ export type MaybeRefOrGetter<T = any> = MaybeRef<T> | ComputedRef<T> | (() => T)
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#unref}
  */
 export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
+  // 如果是 参数ref 对象，返回其 value 属性
+  // 否则，返回 参数ref 本身
   return isRef(ref) ? ref.value : ref
 }
 
@@ -249,6 +267,8 @@ export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#tovalue}
  */
 export function toValue<T>(source: MaybeRefOrGetter<T>): T {
+  // 如果是 参数source 函数，调用其返回值
+  // 否则，调用 unref 函数返回参数source 本身
   return isFunction(source) ? source() : unref(source)
 }
 
@@ -353,8 +373,11 @@ export function toRefs<T extends object>(object: T): ToRefs<T> {
   return ret
 }
 
+/**
+ * 将对象的单个属性转换为响应式的 Ref 对象
+ */
 class ObjectRefImpl<T extends object, K extends keyof T> {
-  public readonly [ReactiveFlags.IS_REF] = true
+  public readonly [ReactiveFlags.IS_REF] = true // 标记为 Ref 对象
   public _value: T[K] = undefined!
 
   private readonly _raw: T
@@ -365,16 +388,19 @@ class ObjectRefImpl<T extends object, K extends keyof T> {
     private readonly _key: K,
     private readonly _defaultValue?: T[K],
   ) {
-    this._raw = toRaw(_object)
+    this._raw = toRaw(_object) //  原始对象（通过 toRaw 获取）
 
-    let shallow = true
+    let shallow = true // 假设是浅层对象
     let obj = _object
 
     // For an array with integer key, refs are not unwrapped
+    // 如果不是数组，或者键不是整数索引
     if (!isArray(_object) || !isIntegerKey(String(_key))) {
       // Otherwise, check each proxy layer for unwrapping
       do {
         shallow = !isProxy(obj) || isShallow(obj)
+
+        // 是浅层响应式的，未进行代理的
       } while (shallow && (obj = (obj as Target)[ReactiveFlags.RAW]))
     }
 
@@ -383,6 +409,8 @@ class ObjectRefImpl<T extends object, K extends keyof T> {
 
   get value() {
     let val = this._object[this._key]
+
+    // 如果是浅层处理模式，解包可能的 ref 值
     if (this._shallow) {
       val = unref(val)
     }
@@ -411,8 +439,10 @@ class GetterRefImpl<T> {
   public readonly [ReactiveFlags.IS_READONLY] = true
   public _value: T = undefined!
 
+  // 接收参数 _getter 作为实例属性
   constructor(private readonly _getter: () => T) {}
   get value() {
+    // 调用 _getter 函数获取值
     return (this._value = this._getter())
   }
 }
@@ -479,6 +509,7 @@ export function toRef<T extends object, K extends keyof T>(
   defaultValue: T[K],
 ): ToRef<Exclude<T[K], undefined>>
 /*@__NO_SIDE_EFFECTS__*/
+// 将参数 source 转换为 ref 对象
 export function toRef(
   source: Record<string, any> | MaybeRef,
   key?: string,
@@ -488,6 +519,8 @@ export function toRef(
     return source
   } else if (isFunction(source)) {
     return new GetterRefImpl(source) as any
+
+    // 如果 source 是一个对象且传入了至少两个参数（即指定了 key）
   } else if (isObject(source) && arguments.length > 1) {
     return propertyToRef(source, key!, defaultValue)
   } else {

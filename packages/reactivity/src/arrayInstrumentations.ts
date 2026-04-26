@@ -42,6 +42,8 @@ function toWrapped(target: unknown, item: unknown) {
 export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
   __proto__: null,
 
+  // 为响应式数组提供自定义的迭代器。
+  // 当使用 for...of 循环或扩展运算符等迭代操作时，会调用这个方法来获取数组的迭代器。
   [Symbol.iterator]() {
     return iterator(this, Symbol.iterator, item => toWrapped(this, item))
   },
@@ -230,10 +232,11 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 }
 
 // instrument iterators to take ARRAY_ITERATE dependency
+// 为响应式数组创建一个自定义迭代器。它确保在迭代过程中返回的值能够被正确地包装为响应式对象。
 function iterator(
-  self: unknown[],
-  method: keyof Array<unknown>,
-  wrapValue: (value: any) => unknown,
+  self: unknown[], // 输入的数组，通常是响应式数组
+  method: keyof Array<unknown>, // 要调用的数组方法，通常是 Symbol.iterator
+  wrapValue: (value: any) => unknown, // 用于包装迭代过程中返回值的函数
 ) {
   // note that taking ARRAY_ITERATE dependency here is not strictly equivalent
   // to calling iterate on the proxied array.
@@ -243,15 +246,18 @@ function iterator(
   // partially iterated in another, then iterated more in yet another.
   // given that JS iterator can only be read once, this doesn't seem like
   // a plausible use-case, so this tracking simplification seems ok.
+  // 获取数组的浅读版本，确保能够访问原始数组的方法
   const arr = shallowReadArray(self)
   const iter = (arr[method] as any)() as IterableIterator<unknown> & {
     _next: IterableIterator<unknown>['next']
   }
   if (arr !== self && !isShallow(self)) {
     iter._next = iter.next
+    // 重写迭代器的 next 方法
     iter.next = () => {
       const result = iter._next()
       if (!result.done) {
+        // 只有当迭代未完成时（!result.done），才对值进行包装
         result.value = wrapValue(result.value)
       }
       return result
