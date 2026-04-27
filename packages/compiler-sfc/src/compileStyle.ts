@@ -122,7 +122,7 @@ export function doCompileStyle(
   const plugins = (postcssPlugins || []).slice()
   // 添加 CSS 变量插件
   plugins.unshift(cssVarsPlugin({ id: shortId, isProd }))
-  // 添加代码裁剪插件（如果需要）
+  // 标准化 CSS 规则和 @规则周围的空白，确保它们前后都只有一个换行符
   if (trim) {
     plugins.push(trimPlugin())
   }
@@ -146,7 +146,9 @@ export function doCompileStyle(
     }
     plugins.push(
       postcssModules({
+        // 用户配置的 CSS Modules 选项
         ...modulesOptions,
+        // 将生成的类名映射存储到 cssModules 变量中
         getJSON: (_cssFileName: string, json: Record<string, string>) => {
           cssModules = json
         },

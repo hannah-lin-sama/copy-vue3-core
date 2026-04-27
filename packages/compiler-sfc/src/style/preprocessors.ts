@@ -82,13 +82,24 @@ const sass: StylePreprocessor = (source, map, options, load) =>
   )
 
 // .less
+/**
+ * 将 Less 代码编译为 CSS 代码
+ * @param source
+ * @param map
+ * @param options
+ * @param load
+ * @returns
+ */
 const less: StylePreprocessor = (source, map, options, load = require) => {
-  const nodeLess = load('less')
+  const nodeLess = load('less') // 加载 Less 模块
 
   let result: any
   let error: Error | null = null
+  // 编译 Less 代码
   nodeLess.render(
+    // 处理源代码，添加附加数据
     getSource(source, options.filename, options.additionalData),
+    // 设置 syncImport: true 确保同步导入依赖
     { ...options, syncImport: true },
     (err: Error | null, output: any) => {
       error = err
@@ -97,6 +108,8 @@ const less: StylePreprocessor = (source, map, options, load = require) => {
   )
 
   if (error) return { code: '', errors: [error], dependencies: [] }
+
+  // 从编译结果中获取依赖列表
   const dependencies = result.imports
   if (map) {
     return {
@@ -138,6 +151,13 @@ const styl: StylePreprocessor = (source, map, options, load = require) => {
   }
 }
 
+/**
+ * 处理源代码，添加附加数据
+ * @param source 源代码
+ * @param filename 文件名
+ * @param additionalData 附加数据
+ * @returns
+ */
 function getSource(
   source: string,
   filename: string,

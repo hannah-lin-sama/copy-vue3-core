@@ -106,7 +106,7 @@ export function renderSlot(
 
   // 作用域ID
   if (!noSlotted && rendered.scopeId) {
-    rendered.slotScopeIds = [rendered.scopeId + '-s']
+    rendered.slotScopeIds = [rendered.scopeId + '-s'] // 标记为作用域插槽
   }
   // 恢复插槽函数的块跟踪
   if (slot && (slot as ContextualRenderFn)._c) {

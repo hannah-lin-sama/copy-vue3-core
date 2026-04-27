@@ -62,11 +62,22 @@ export function escapeHtmlComment(src: string): string {
 export const cssVarNameEscapeSymbolsRE: RegExp =
   /[ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g
 
+/**
+ * 转义 CSS 变量名中的特殊字符
+ * @param key CSS 变量名字符串
+ * @param doubleEscape 是否需要双转义
+ * @returns
+ */
 export function getEscapedCssVarName(
   key: string,
   doubleEscape: boolean,
 ): string {
   return key.replace(cssVarNameEscapeSymbolsRE, s =>
+    // 如果 doubleEscape 为 true：
+    // - 如果 s 是双引号 "，则转义为 \\\\\\"
+    // - 否则，转义为 \\\\${s}
+    // 如果 doubleEscape 为 false：
+    // -转义为 \\${s}
     doubleEscape ? (s === '"' ? '\\\\\\"' : `\\\\${s}`) : `\\${s}`,
   )
 }

@@ -18,6 +18,7 @@ const scopedPlugin: PluginCreator<string> = (id = '') => {
 
   return {
     postcssPlugin: 'vue-sfc-scoped',
+    // 处理 CSS 规则并为其添加作用域标识符
     Rule(rule) {
       processRule(id, rule)
     },
@@ -66,6 +67,7 @@ const scopedPlugin: PluginCreator<string> = (id = '') => {
 const processedRules = new WeakSet<Rule>()
 
 function processRule(id: string, rule: Rule) {
+  // 如果规则已经处理过，或者是一个 @keyframes 规则，直接返回
   if (
     processedRules.has(rule) ||
     (rule.parent &&
@@ -74,9 +76,11 @@ function processRule(id: string, rule: Rule) {
   ) {
     return
   }
-  processedRules.add(rule)
+  processedRules.add(rule) // 标记为已处理
   let deep = false
   let parent: Document | Container | undefined = rule.parent
+
+  // 检查规则是否在深层选择器（如 ::v-deep）内部
   while (parent && parent.type !== 'root') {
     if ((parent as any).__deep) {
       deep = true
@@ -84,6 +88,8 @@ function processRule(id: string, rule: Rule) {
     }
     parent = parent.parent
   }
+
+  // 重写选择器，添加作用域标识符
   rule.selector = selectorParser(selectorRoot => {
     selectorRoot.each(selector => {
       rewriteSelector(id, rule, selector, selectorRoot, deep)
@@ -91,6 +97,15 @@ function processRule(id: string, rule: Rule) {
   }).processSync(rule.selector)
 }
 
+/**
+ *
+ * @param id 组件的作用域标识符
+ * @param rule Rule 类型，当前处理的 CSS 规则
+ * @param selector 当前处理的选择器
+ * @param selectorRoot 选择器的根节点
+ * @param deep 是否为深层选择器
+ * @param slotted 是否为插槽选择器
+ */
 function rewriteSelector(
   id: string,
   rule: Rule,
@@ -104,6 +119,8 @@ function rewriteSelector(
   // find the last child node to insert attribute selector
   selector.each(n => {
     // DEPRECATED ">>>" and "/deep/" combinator
+    // 处理废弃的组合器：
+    // 处理 >>> 和 /deep/ 组合器，将其替换为空格，并发出警告
     if (
       n.type === 'combinator' &&
       (n.value === '>>>' || n.value === '/deep/')
@@ -117,12 +134,14 @@ function rewriteSelector(
       return false
     }
 
+    // 处理伪类选择器
     if (n.type === 'pseudo') {
       const { value } = n
       // deep: inject [id] attribute at the node before the ::v-deep
       // combinator.
+      //  ::v-deep 伪类处理
       if (value === ':deep' || value === '::v-deep') {
-        ;(rule as any).__deep = true
+        ;(rule as any).__deep = true // 标记为深层选择器
         if (n.nodes.length) {
           // .foo ::v-deep(.bar) -> .foo[xxxxxxx] .bar
           // replace the current node with ::v-deep's inner selector
@@ -162,6 +181,7 @@ function rewriteSelector(
       // slot: use selector inside `::v-slotted` and inject [id + '-s']
       // instead.
       // ::v-slotted(.foo) -> .foo[xxxxxxx-s]
+      // ::v-slotted 伪类处理
       if (value === ':slotted' || value === '::v-slotted') {
         rewriteSelector(
           id,
@@ -186,17 +206,22 @@ function rewriteSelector(
 
       // global: replace with inner selector and do not inject [id].
       // ::v-global(.foo) -> .foo
+      // ::v-global 伪类处理
       if (value === ':global' || value === '::v-global') {
+        // 直接用 ::v-global 内部的选择器替换整个选择器
         selector.replaceWith(n.nodes[0])
         return false
       }
     }
 
+    // 处理通用选择器（*）的逻辑
     if (n.type === 'universal') {
       const prev = selector.at(selector.index(n) - 1)
       const next = selector.at(selector.index(n) + 1)
       // * ... {}
+      // 处理无前置节点的情况
       if (!prev) {
+        // 情况 1：有后置节点（* .foo {}）：
         // * .foo {} -> .foo[xxxxxxx] {}
         if (next) {
           if (next.type === 'combinator' && next.value === ' ') {
@@ -205,6 +230,7 @@ function rewriteSelector(
           selector.removeChild(n)
           return
         } else {
+          // 情况 2：无后置节点（* {}）：
           // * {} -> [xxxxxxx] {}
           node = selectorParser.combinator({
             value: '',
@@ -214,6 +240,7 @@ function rewriteSelector(
           return false
         }
       }
+      // 处理有前置节点的情况（.foo *）
       // .foo * -> .foo[xxxxxxx] *
       if (node) return
     }
@@ -260,6 +287,7 @@ function rewriteSelector(
   }
 
   if (shouldInject) {
+    // 处理需要注入 [id] 的情况
     const idToAdd = slotted ? id + '-s' : id
     selector.insertAfter(
       // If node is null it means we need to inject [id] at the start
