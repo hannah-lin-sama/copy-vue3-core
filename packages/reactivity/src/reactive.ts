@@ -99,6 +99,8 @@ export function reactive<T extends object>(target: T): Reactive<T>
 /*@__NO_SIDE_EFFECTS__*/
 export function reactive(target: object) {
   // if trying to observe a readonly proxy, return the readonly version.
+  // 如果尝试观察只读代理对象，返回只读版本
+  // 只读对象本身已经是响应式的，不需要再次转换
   if (isReadonly(target)) {
     return target
   }
@@ -265,6 +267,15 @@ export function shallowReadonly<T extends object>(target: T): Readonly<T> {
   )
 }
 
+/**
+ * 负责创建响应式对象（reactive）或只读响应式对象（readonly）
+ * @param target 要转换为响应式的目标对象，可以是普通对象、数组、Map、Set 等
+ * @param isReadonly 指示是否创建只读的响应式对象
+ * @param baseHandlers 基本类型对象（普通对象、数组）的代理处理器，包含 get、set、deleteProperty 等陷阱（trap）
+ * @param collectionHandlers 集合类型对象（Map、Set、WeakMap、WeakSet）的代理处理器
+ * @param proxyMap 存储原始对象与代理对象的映射关系
+ * @returns
+ */
 function createReactiveObject(
   target: Target,
   isReadonly: boolean,
@@ -273,6 +284,7 @@ function createReactiveObject(
   proxyMap: WeakMap<Target, any>,
 ) {
   if (!isObject(target)) {
+    // 在开发环境下，发出警告，提示不能将非对象转换为响应式
     if (__DEV__) {
       warn(
         `value cannot be made ${isReadonly ? 'readonly' : 'reactive'}: ${String(
@@ -285,13 +297,14 @@ function createReactiveObject(
   // target is already a Proxy, return it.
   // exception: calling readonly() on a reactive object
   if (
-    target[ReactiveFlags.RAW] &&
+    target[ReactiveFlags.RAW] && // 代理对象获取 ReactiveFlags.RAW 会返回原始值
     !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
   ) {
     return target
   }
   // only specific value types can be observed.
-  const targetType = getTargetType(target)
+  const targetType = getTargetType(target) // 获取目标对象的类型
+  // 如果类型无效（如 symbol、function 等），直接返回目标
   if (targetType === TargetType.INVALID) {
     return target
   }
@@ -331,10 +344,16 @@ function createReactiveObject(
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#isreactive}
  */
 /*@__NO_SIDE_EFFECTS__*/
+// 检查一个值是否是 Vue 创建的响应式代理对象
 export function isReactive(value: unknown): boolean {
   if (isReadonly(value)) {
+    // 当传入的值是只读对象时，需要获取其原始值
+    // 原始值递归调用 isReactive
     return isReactive((value as Target)[ReactiveFlags.RAW])
   }
+  // 检查值是否是对象且有 ReactiveFlags.IS_REACTIVE 标志
+  // 如果是，说明是 Vue 创建的响应式代理对象
+  // 如果不是，说明不是 Vue 创建的响应式代理对象
   return !!(value && (value as Target)[ReactiveFlags.IS_REACTIVE])
 }
 
@@ -367,6 +386,7 @@ export function isShallow(value: unknown): boolean {
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#isproxy}
  */
 /*@__NO_SIDE_EFFECTS__*/
+// 当 Vue 创建响应式代理时，在代理对象上获取此标志 会返回原始值
 export function isProxy(value: any): boolean {
   return value ? !!value[ReactiveFlags.RAW] : false
 }
@@ -395,6 +415,7 @@ export function isProxy(value: any): boolean {
  * @see {@link https://vuejs.org/api/reactivity-advanced.html#toraw}
  */
 /*@__NO_SIDE_EFFECTS__*/
+// 递归获取原始对象
 export function toRaw<T>(observed: T): T {
   const raw = observed && (observed as Target)[ReactiveFlags.RAW]
   return raw ? toRaw(raw) : observed
@@ -424,8 +445,11 @@ export type Raw<T> = T & { [RawSymbol]?: true }
  * @param value - The object to be marked as "raw".
  * @see {@link https://vuejs.org/api/reactivity-advanced.html#markraw}
  */
+// 标记一个对象，使其永远不会被转换为响应式对象
 export function markRaw<T extends object>(value: T): Raw<T> {
+  // 如果对象没有 ReactiveFlags.SKIP 标志，且是可扩展的
   if (!hasOwn(value, ReactiveFlags.SKIP) && Object.isExtensible(value)) {
+    // 定义 ReactiveFlags.SKIP 标志，值为 true
     def(value, ReactiveFlags.SKIP, true)
   }
   return value

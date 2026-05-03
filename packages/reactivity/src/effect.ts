@@ -46,14 +46,14 @@ export enum EffectFlags {
   /**
    * ReactiveEffect only
    */
-  ACTIVE = 1 << 0, // 活跃状态
-  RUNNING = 1 << 1, // 运行状态
-  TRACKING = 1 << 2, // 跟踪状态
-  NOTIFIED = 1 << 3, // 已通知状态
-  DIRTY = 1 << 4, // 脏状态
-  ALLOW_RECURSE = 1 << 5, // 允许递归状态
-  PAUSED = 1 << 6, // 暂停状态
-  EVALUATED = 1 << 7, // 已评估状态
+  ACTIVE = 1 << 0, // 1 活跃状态
+  RUNNING = 1 << 1, // 2 运行状态
+  TRACKING = 1 << 2, // 4 跟踪状态
+  NOTIFIED = 1 << 3, // 8 已通知状态
+  DIRTY = 1 << 4, // 16 脏状态
+  ALLOW_RECURSE = 1 << 5, // 32 允许递归状态
+  PAUSED = 1 << 6, // 64暂停状态
+  EVALUATED = 1 << 7, // 128已评估状态
 }
 
 /**
@@ -132,9 +132,7 @@ export class ReactiveEffect<T = any>
   onTrigger?: (event: DebuggerEvent) => void
 
   constructor(public fn: () => T) {
-    // 构造函数接收一个函数 fn，并将其存储为实例属性
     if (activeEffectScope && activeEffectScope.active) {
-      // 将当前 effect 实例天道到作用域的 effect 列表中
       activeEffectScope.effects.push(this)
     }
   }
@@ -162,16 +160,15 @@ export class ReactiveEffect<T = any>
    */
   notify(): void {
     if (
-      // 如果当前 effect 实例正在运行中，且不允许递归调用
+      // 当前 effect 实例正在运行中，且不允许递归调用
       this.flags & EffectFlags.RUNNING &&
       !(this.flags & EffectFlags.ALLOW_RECURSE)
     ) {
       return
     }
-    // 如果当前 effect 实例未被通知过
+    // 当前 effect 实例未被通知过
     if (!(this.flags & EffectFlags.NOTIFIED)) {
-      // 标记当前 effect 实例为已通知
-      batch(this)
+      batch(this) // 加入订阅者队列
     }
   }
 
@@ -186,18 +183,13 @@ export class ReactiveEffect<T = any>
 
     // 标记当前 effect 实例为正在运行
     this.flags |= EffectFlags.RUNNING
-    // 清理当前 effect 实例的依赖链表
-    cleanupEffect(this)
-    // 准备当前 effect 实例的依赖链表
-    prepareDeps(this)
+    cleanupEffect(this) // 清理当前 effect 实例的依赖链表
+    prepareDeps(this) // 准备当前 effect 实例的依赖链表
     const prevEffect = activeSub
     const prevShouldTrack = shouldTrack
 
-    // 设置当前实例为活跃订阅者
-    activeSub = this
-
-    // 标记当前实例为正在追踪依赖
-    shouldTrack = true
+    activeSub = this // 设置当前实例为活跃订阅者
+    shouldTrack = true // 标记当前实例为正在追踪依赖
 
     try {
       // 调用当前 effect 实例的 fn 函数
@@ -400,22 +392,16 @@ function cleanupDeps(sub: Subscriber) {
   // 逆序遍历依赖链表
   while (link) {
     const prev = link.prevDep
-
     // 在 prepareDeps 函数中，所有依赖的版本号会被重置为 -1
-    // 版本号仍为 -1 的依赖表示在本次运行中未被使用
     if (link.version === -1) {
-      // 如果当前链接是尾部，更新 tail 为前一个节点
       if (link === tail) tail = prev
       // unused - remove it from the dep's subscribing effect list
-      // 从依赖的订阅者列表中移除该链接
       removeSub(link)
       // also remove it from this effect's dep list
-      // 从订阅者的依赖列表中移除该链接
       removeDep(link)
     } else {
       // The new head is the last node seen which wasn't removed
       // from the doubly-linked list
-      // 因为是逆序遍历，最后一个被使用的链接会成为新的头部
       head = link
     }
 
@@ -437,9 +423,6 @@ function cleanupDeps(sub: Subscriber) {
  */
 function isDirty(sub: Subscriber): boolean {
   for (let link = sub.deps; link; link = link.nextDep) {
-    // 版本号检查：
-    // 对于每个依赖，检查 link.dep.version（依赖的当前版本）是否与 link.version（订阅者记录的版本）不一致。
-    // 版本号不一致意味着依赖的数据发生了变化，订阅者需要重新执行。
     if (
       link.dep.version !== link.version ||
       // 计算属性特殊处理：
@@ -610,13 +593,10 @@ export function effect<T = any>(
   fn: () => T,
   options?: ReactiveEffectOptions,
 ): ReactiveEffectRunner<T> {
-  // 检查 fn 是否已经是一个 ReactiveEffectRunner（即之前通过 effect 函数创建的 runner）
   if ((fn as ReactiveEffectRunner).effect instanceof ReactiveEffect) {
-    // 使用其内部的原始函数 effect.fn
     fn = (fn as ReactiveEffectRunner).effect.fn
   }
 
-  // 创建一个新的 ReactiveEffect 实例，传入副作用函数 fn
   const e = new ReactiveEffect(fn)
   if (options) {
     extend(e, options)
@@ -624,14 +604,11 @@ export function effect<T = any>(
   try {
     e.run()
   } catch (err) {
-    // 如果副作用函数执行过程中抛出异常，停止该副作用函数的依赖追踪
     e.stop()
     throw err
   }
-
-  // 创建 runner 函数，用于手动触发副作用函数的执行
+  // bind修改this指向，返回一个函数
   const runner = e.run.bind(e) as ReactiveEffectRunner
-  // 将 runner 函数关联的 effect 实例赋值给 runner.effect，方便后续调用
   runner.effect = e
   return runner
 }
@@ -659,7 +636,7 @@ const trackStack: boolean[] = []
  */
 export function pauseTracking(): void {
   trackStack.push(shouldTrack)
-  shouldTrack = false
+  shouldTrack = false // 暂停依赖依赖收集
 }
 
 /**
@@ -668,7 +645,7 @@ export function pauseTracking(): void {
  */
 export function enableTracking(): void {
   trackStack.push(shouldTrack)
-  shouldTrack = true
+  shouldTrack = true // 恢复依赖依赖收集
 }
 
 /**
@@ -703,12 +680,18 @@ export function onEffectCleanup(fn: () => void, failSilently = false): void {
   }
 }
 
+/**
+ * 执行副作用函数的清理函数
+ * @param e 要执行清理函数的副作用函数实例
+ */
 function cleanupEffect(e: ReactiveEffect) {
   const { cleanup } = e
+  // 防止重复执行
   e.cleanup = undefined
   if (cleanup) {
     // run cleanup without active effect
     const prevSub = activeSub
+    // 防止清理函数中访问响应式数据时产生新的依赖
     activeSub = undefined
     try {
       cleanup() // 执行清理函数

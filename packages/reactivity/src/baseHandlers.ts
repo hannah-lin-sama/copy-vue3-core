@@ -27,13 +27,16 @@ import { warn } from './warning'
 
 const isNonTrackableKeys = /*@__PURE__*/ makeMap(`__proto__,__v_isRef,__isVue`)
 
+// 识别 JavaScript 内置 Symbol 属性的常量集合
 const builtInSymbols = new Set(
   /*@__PURE__*/
+  // 获取 Symbol 构造函数的所有可枚举属性名
   Object.getOwnPropertyNames(Symbol)
     // ios10.x Object.getOwnPropertyNames(Symbol) can enumerate 'arguments' and 'caller'
     // but accessing them on Symbol leads to TypeError because Symbol is a strict mode
     // function
     .filter(key => key !== 'arguments' && key !== 'caller')
+    // 过滤出真正的 Symbol 类型
     .map(key => Symbol[key as keyof SymbolConstructor])
     .filter(isSymbol),
 )
@@ -101,7 +104,7 @@ class BaseReactiveHandler implements ProxyHandler<Target> {
       // arrayInstrumentations 是一个对象，存储了被 Vue 重写的数组方法
       // 当访问数组的这些方法时，返回重写后的版本，而不是原生方法
       if (targetIsArray && (fn = arrayInstrumentations[key])) {
-        return fn
+        return fn // 找到重写后的数组方法，直接返回
       }
       if (key === 'hasOwnProperty') {
         return hasOwnProperty
@@ -123,11 +126,9 @@ class BaseReactiveHandler implements ProxyHandler<Target> {
     if (isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key)) {
       return res
     }
-    // 非只读模式：在非只读模式下，调用 track 函数进行依赖追踪
     if (!isReadonly) {
       track(target, TrackOpTypes.GET, key)
     }
-    // 浅层模式：如果是浅层响应式，直接返回结果，不进行深度转换
     if (isShallow) {
       return res
     }
@@ -155,6 +156,14 @@ class MutableReactiveHandler extends BaseReactiveHandler {
     super(false, isShallow)
   }
 
+  /**
+   * 拦截对象属性的设置操作（即 obj[key] = value）
+   * @param target
+   * @param key
+   * @param value
+   * @param receiver
+   * @returns
+   */
   set(
     target: Record<string | symbol, unknown>,
     key: string | symbol,
@@ -162,16 +171,23 @@ class MutableReactiveHandler extends BaseReactiveHandler {
     receiver: object,
   ): boolean {
     let oldValue = target[key]
+
+    // 是否数组操作且键为整数
     const isArrayWithIntegerKey = isArray(target) && isIntegerKey(key)
+
+    // 非浅层
     if (!this._isShallow) {
-      const isOldValueReadonly = isReadonly(oldValue)
+      const isOldValueReadonly = isReadonly(oldValue) // 旧值是否只读
       if (!isShallow(value) && !isReadonly(value)) {
-        oldValue = toRaw(oldValue)
-        value = toRaw(value)
+        oldValue = toRaw(oldValue) // 将旧值转为原始值
+        value = toRaw(value) // 将新值转为原始值
       }
+
+      // 非数组、旧值是响应式 Ref、新值不是响应式 Ref
       if (!isArrayWithIntegerKey && isRef(oldValue) && !isRef(value)) {
         if (isOldValueReadonly) {
           if (__DEV__) {
+            // 如果旧值是只读的，发出警告并返回（不允许修改）
             warn(
               `Set operation on key "${String(key)}" failed: target is readonly.`,
               target[key],
@@ -179,6 +195,7 @@ class MutableReactiveHandler extends BaseReactiveHandler {
           }
           return true
         } else {
+          // 直接修改 ref.value，触发响应式更新
           oldValue.value = value
           return true
         }
@@ -187,11 +204,12 @@ class MutableReactiveHandler extends BaseReactiveHandler {
       // in shallow mode, objects are set as-is regardless of reactive or not
     }
 
+    // 判断属性是否已存在
+    // 对于数组：检查索引是否小于数组长度（判断是否是新增元素）
     const hadKey = isArrayWithIntegerKey
       ? Number(key) < target.length
       : hasOwn(target, key)
 
-    //
     const result = Reflect.set(
       target,
       key,
@@ -199,6 +217,7 @@ class MutableReactiveHandler extends BaseReactiveHandler {
       isRef(target) ? target : receiver,
     )
     // don't trigger if target is something up in the prototype chain of original
+    // 确保只在目标对象本身上设置属性时才触发更新（避免原型链上的属性设置触发更新）
     if (target === toRaw(receiver)) {
       if (!hadKey) {
         // 新增属性

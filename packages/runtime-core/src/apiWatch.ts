@@ -171,18 +171,21 @@ function doWatch(
   const { immediate, deep, flush, once } = options
 
   if (__DEV__ && !cb) {
+    // immediate 选项仅在 watch(source, callback, options?) 签名下尊重
     if (immediate !== undefined) {
       warn(
         `watch() "immediate" option is only respected when using the ` +
           `watch(source, callback, options?) signature.`,
       )
     }
+    // deep 选项仅在 watch(source, callback, options?) 签名下尊重
     if (deep !== undefined) {
       warn(
         `watch() "deep" option is only respected when using the ` +
           `watch(source, callback, options?) signature.`,
       )
     }
+    // once 选项仅在 watch(source, callback, options?) 签名下尊重
     if (once !== undefined) {
       warn(
         `watch() "once" option is only respected when using the ` +
@@ -217,11 +220,11 @@ function doWatch(
 
   const instance = currentInstance
 
-  // options配置
+  // options.call 配置：自定义调用函数，用于处理异步错误和组件实例关联
   baseWatchOptions.call = (fn, type, args) =>
     callWithAsyncErrorHandling(fn, instance, type, args)
 
-  // scheduler 调度器设置
+  // options.scheduler 配置：自定义调度器，用于控制回调函数的执行时机
   let isPre = false
   if (flush === 'post') {
     // 执行时机：DOM 更新后执行
@@ -229,7 +232,6 @@ function doWatch(
     baseWatchOptions.scheduler = job => {
       queuePostRenderEffect(job, instance && instance.suspense)
     }
-
     // 执行时机：DOM 更新前执行（默认行为）
   } else if (flush !== 'sync') {
     // default: 'pre'
@@ -245,6 +247,7 @@ function doWatch(
     }
   }
 
+  // options.augmentJob 配置：自定义 job 处理函数，用于在调度器中处理 job
   baseWatchOptions.augmentJob = (job: SchedulerJob) => {
     // important: mark the job as a watcher callback so that scheduler knows
     // it is allowed to self-trigger (#1727)

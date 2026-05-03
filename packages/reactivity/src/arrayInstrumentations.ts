@@ -20,6 +20,7 @@ import { isArray } from '@vue/shared'
 export function reactiveReadArray<T>(array: T[]): T[] {
   const raw = toRaw(array)
   if (raw === array) return raw
+  // 跟踪数组迭代
   track(raw, TrackOpTypes.ITERATE, ARRAY_ITERATE_KEY)
   return isShallow(array) ? raw : raw.map(toReactive)
 }
@@ -28,32 +29,36 @@ export function reactiveReadArray<T>(array: T[]): T[] {
  * Track array iteration and return raw array
  */
 export function shallowReadArray<T>(arr: T[]): T[] {
+  // 确保数组是原始值，避免循环引用
   track((arr = toRaw(arr)), TrackOpTypes.ITERATE, ARRAY_ITERATE_KEY)
   return arr
 }
 
 function toWrapped(target: unknown, item: unknown) {
   if (isReadonly(target)) {
+    // 将item转为只读响应式值
     return isReactive(target) ? toReadonly(toReactive(item)) : toReadonly(item)
   }
+  // 非只读数组，直接返回响应式值
   return toReactive(item)
 }
 
 export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
-  __proto__: null,
+  __proto__: null, // 防止继承 Array.prototype
 
-  // 为响应式数组提供自定义的迭代器。
-  // 当使用 for...of 循环或扩展运算符等迭代操作时，会调用这个方法来获取数组的迭代器。
+  // 直接原因是为了解决 Ref 自动解包 和 代理/原始值混合遍历 时的正确性问题。
   [Symbol.iterator]() {
     return iterator(this, Symbol.iterator, item => toWrapped(this, item))
   },
 
+  // 合并数组
   concat(...args: unknown[]) {
     return reactiveReadArray(this).concat(
       ...args.map(x => (isArray(x) ? reactiveReadArray(x) : x)),
     )
   },
 
+  // 遍历数组的每个元素
   entries() {
     return iterator(this, 'entries', (value: [number, unknown]) => {
       value[1] = toWrapped(this, value[1])
@@ -61,6 +66,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
     })
   },
 
+  // 遍历数组
   every(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
     thisArg?: unknown,
@@ -68,6 +74,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
     return apply(this, 'every', fn, thisArg, undefined, arguments)
   },
 
+  // 遍历数组
   filter(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
     thisArg?: unknown,
@@ -82,20 +89,27 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
     )
   },
 
+  /**
+   * 查找数组中第一个满足测试函数的元素
+   * @param fn 回调函数，用于测试数组中的每个元素
+   * @param thisArg 回调函数的 上 this 指向
+   * @returns 第一个满足测试函数的数组元素
+   */
   find(
     fn: (item: unknown, index: number, array: unknown[]) => boolean,
     thisArg?: unknown,
   ) {
     return apply(
-      this,
+      this, // 确保数组是响应式的
       'find',
-      fn,
-      thisArg,
-      item => toWrapped(this, item),
-      arguments,
+      fn, // 用户传入的回调函数
+      thisArg, // 用户传入的 thisArg
+      item => toWrapped(this, item), // 包装数组元素，确保响应式
+      arguments, // 传递原始参数
     )
   },
 
+  // 遍历数组
   findIndex(
     fn: (item: unknown, index: number, array: unknown[]) => boolean,
     thisArg?: unknown,
@@ -238,24 +252,18 @@ function iterator(
   method: keyof Array<unknown>, // 要调用的数组方法，通常是 Symbol.iterator
   wrapValue: (value: any) => unknown, // 用于包装迭代过程中返回值的函数
 ) {
-  // note that taking ARRAY_ITERATE dependency here is not strictly equivalent
-  // to calling iterate on the proxied array.
-  // creating the iterator does not access any array property:
-  // it is only when .next() is called that length and indexes are accessed.
-  // pushed to the extreme, an iterator could be created in one effect scope,
-  // partially iterated in another, then iterated more in yet another.
-  // given that JS iterator can only be read once, this doesn't seem like
-  // a plausible use-case, so this tracking simplification seems ok.
-  // 获取数组的浅读版本，确保能够访问原始数组的方法
-  const arr = shallowReadArray(self)
+  const arr = shallowReadArray(self) // 获取原始数组
+
+  // 调用原生迭代器方法，生成原生迭代器对象
   const iter = (arr[method] as any)() as IterableIterator<unknown> & {
     _next: IterableIterator<unknown>['next']
   }
+  // 数组是响应式的， 且不是浅层响应式的
   if (arr !== self && !isShallow(self)) {
     iter._next = iter.next
     // 重写迭代器的 next 方法
     iter.next = () => {
-      const result = iter._next()
+      const result = iter._next() // 调用原生迭代器的 next 方法
       if (!result.done) {
         // 只有当迭代未完成时（!result.done），才对值进行包装
         result.value = wrapValue(result.value)
@@ -281,15 +289,11 @@ function apply(
   wrappedRetFn?: (result: any) => unknown,
   args?: IArguments,
 ) {
-  const arr = shallowReadArray(self)
-  const needsWrap = arr !== self && !isShallow(self)
+  const arr = shallowReadArray(self) // 获取原始数组、依赖追踪
+  const needsWrap = arr !== self && !isShallow(self) // 是否需要包装数组元素
   // @ts-expect-error our code is limited to es2016 but user code is not
   const methodFn = arr[method]
 
-  // #11759
-  // If the method being called is from a user-extended Array, the arguments will be unknown
-  // (unknown order and unknown parameter types). In this case, we skip the shallowReadArray
-  // handling and directly call apply with self.
   if (methodFn !== arrayProto[method as any]) {
     const result = methodFn.apply(self, args)
     return needsWrap ? toReactive(result) : result
@@ -298,6 +302,7 @@ function apply(
   let wrappedFn = fn
   if (arr !== self) {
     if (needsWrap) {
+      // 包装数组元素，确保响应式
       wrappedFn = function (this: unknown, item, index) {
         return fn.call(this, toWrapped(self, item), index, self)
       }
@@ -318,19 +323,24 @@ function reduce(
   fn: (acc: unknown, item: unknown, index: number, array: unknown[]) => unknown,
   args: unknown[],
 ) {
-  const arr = shallowReadArray(self)
+  const arr = shallowReadArray(self) // 获取原始数组、依赖追踪
   let wrappedFn = fn
   if (arr !== self) {
     if (!isShallow(self)) {
+      // 包装回调函数
       wrappedFn = function (this: unknown, acc, item, index) {
+        // 执行回调函数，确保数组元素是响应式的
         return fn.call(this, acc, toWrapped(self, item), index, self)
       }
     } else if (fn.length > 3) {
       wrappedFn = function (this: unknown, acc, item, index) {
+        // 目的：只修复第四个参数（数组引用），保持浅响应式语义
         return fn.call(this, acc, item, index, self)
       }
     }
   }
+  // 执行原生方法并返回结果
+  // 示例 arr.reduce((sum,item,index.arr) => sum + item, 0)
   return (arr[method] as any)(wrappedFn, ...args)
 }
 
@@ -356,15 +366,18 @@ function searchProxy(
 
 // instrument length-altering mutation methods to avoid length being tracked
 // which leads to infinite loops in some cases (#2137)
+// 在不追踪依赖的情况下执行数组方法
 function noTracking(
   self: unknown[],
   method: keyof Array<any>,
   args: unknown[] = [],
 ) {
-  pauseTracking()
-  startBatch()
+  pauseTracking() // 暂停依赖收集，但已存在的依赖仍然会被触发更新
+  startBatch() // 开启批量更新
+
+  // 直接调用原始数组的方法可以避免再次经过 Proxy 的拦截器，防止递归调用或循环依赖
   const res = (toRaw(self) as any)[method].apply(self, args)
   endBatch()
-  resetTracking()
+  resetTracking() // 恢复依赖追踪
   return res
 }

@@ -134,8 +134,7 @@ export class ComputedRefImpl<T = any> implements Subscriber {
       // avoid infinite self recursion
       activeSub !== this
     ) {
-      // 第二个参数 true，将计算属性加入计算批处理队列
-      batch(this, true)
+      batch(this, true) // 加入计算批处理队列
       return true // 返回 true，表示这是一个计算属性，需要通知其依赖
     } else if (__DEV__) {
       // TODO warn

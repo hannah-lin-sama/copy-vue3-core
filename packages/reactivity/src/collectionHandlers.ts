@@ -42,11 +42,16 @@ function createIterableMethod(
     const target = this[ReactiveFlags.RAW]
     const rawTarget = toRaw(target)
     const targetIsMap = isMap(rawTarget)
+
+    // 迭代方法（entries, Symbol.iterator）
     const isPair =
       method === 'entries' || (method === Symbol.iterator && targetIsMap)
+    // keys 方法
     const isKeyOnly = method === 'keys' && targetIsMap
-    const innerIterator = target[method](...args)
+
+    const innerIterator = target[method](...args) // 调用原始迭代器
     const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
+    // 跟踪迭代迭代器
     !isReadonly &&
       track(
         rawTarget,
@@ -60,6 +65,7 @@ function createIterableMethod(
       Object.create(innerIterator),
       {
         // iterator protocol
+        // 重写 next() 方法，在每次迭代时包装返回值
         next() {
           const { value, done } = innerIterator.next()
           return done
@@ -93,11 +99,18 @@ function createReadonlyMethod(type: TriggerOpTypes): Function {
 
 type Instrumentations = Record<string | symbol, Function | number>
 
+/**
+ * 创建集合响应式处理函数
+ * @param readonly 是否只读
+ * @param shallow 是否浅层响应式
+ * @returns
+ */
 function createInstrumentations(
   readonly: boolean,
   shallow: boolean,
 ): Instrumentations {
   const instrumentations: Instrumentations = {
+    // get 方法（Map 专用）
     get(this: MapTypes, key: unknown) {
       // #1772: readonly(reactive(Map)) should return readonly + reactive version
       // of the value
@@ -106,12 +119,16 @@ function createInstrumentations(
       const rawKey = toRaw(key)
       if (!readonly) {
         if (hasChanged(key, rawKey)) {
+          // 追踪代理 key
           track(rawTarget, TrackOpTypes.GET, key)
         }
+        // 追踪原始 key
         track(rawTarget, TrackOpTypes.GET, rawKey)
       }
       const { has } = getProto(rawTarget)
       const wrap = shallow ? toShallow : readonly ? toReadonly : toReactive
+
+      // 查找值：先尝试代理 key，再尝试原始 key
       if (has.call(rawTarget, key)) {
         return wrap(target.get(key))
       } else if (has.call(rawTarget, rawKey)) {
@@ -124,6 +141,7 @@ function createInstrumentations(
     },
     get size() {
       const target = (this as unknown as IterableCollections)[ReactiveFlags.RAW]
+      // 追踪 size 属性
       !readonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
       return target.size
     },
@@ -133,9 +151,9 @@ function createInstrumentations(
       const rawKey = toRaw(key)
       if (!readonly) {
         if (hasChanged(key, rawKey)) {
-          track(rawTarget, TrackOpTypes.HAS, key)
+          track(rawTarget, TrackOpTypes.HAS, key) // 追踪代理 key
         }
-        track(rawTarget, TrackOpTypes.HAS, rawKey)
+        track(rawTarget, TrackOpTypes.HAS, rawKey) // 追踪原始 key
       }
       return key === rawKey
         ? target.has(key)
@@ -260,6 +278,7 @@ function createInstrumentations(
   return instrumentations
 }
 
+// 创建集合响应式处理函数的 get 拦截器
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
   const instrumentations = createInstrumentations(isReadonly, shallow)
 
@@ -278,8 +297,8 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
 
     return Reflect.get(
       hasOwn(instrumentations, key) && key in target
-        ? instrumentations
-        : target,
+        ? instrumentations // 使用重写的方法
+        : target, // 使用原生方法
       key,
       receiver,
     )

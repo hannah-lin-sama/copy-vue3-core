@@ -191,14 +191,13 @@ export function watch(
         } else if (isFunction(s)) {
           return call ? call(s, WatchErrorCodes.WATCH_GETTER) : s()
         } else {
+          // 其他类型，发出警告
           __DEV__ && warnInvalidSource(s)
         }
       })
   } else if (isFunction(source)) {
     // 1、有回调函数
     if (cb) {
-      // getter with cb
-      // 如果有回调，作为 getter 使用
       getter = call
         ? () => call(source, WatchErrorCodes.WATCH_GETTER)
         : (source as () => any)
@@ -221,17 +220,17 @@ export function watch(
         const currentEffect = activeWatcher
         activeWatcher = effect // 设置当前 watcher
         try {
+          // 立即执行一次回调函数，并进行依赖收集
           return call
-            ? // 使用 call 函数执行 source
-              call(source, WatchErrorCodes.WATCH_CALLBACK, [boundCleanup])
-            : // 直接调用 source 函数
-              source(boundCleanup)
+            ? call(source, WatchErrorCodes.WATCH_CALLBACK, [boundCleanup])
+            : source(boundCleanup)
         } finally {
           activeWatcher = currentEffect
         }
       }
     }
   } else {
+    // 其他情况发出警告
     getter = NOOP
     __DEV__ && warnInvalidSource(source)
   }
@@ -250,11 +249,8 @@ export function watch(
 
   // 手动停止 watch 的函数
   const watchHandle: WatchHandle = () => {
-    // 停止内部的 ReactiveEffect 实例
     effect.stop()
-    // 如果存在 scope 且 scope 是活跃的
     if (scope && scope.active) {
-      // 移除当前 effect
       remove(scope.effects, effect)
     }
   }
@@ -264,7 +260,7 @@ export function watch(
     const _cb = cb
     cb = (...args) => {
       _cb(...args)
-      watchHandle()
+      watchHandle() // 手动停止 watch
     }
   }
 
@@ -275,19 +271,16 @@ export function watch(
     : INITIAL_WATCHER_VALUE
 
   const job = (immediateFirstRun?: boolean) => {
-    // 前提检查：effect非活跃、不是脏的，且不是首次运行
-    // 避免不必要的执行，提高性能
+    // 前提检查
     if (
       !(effect.flags & EffectFlags.ACTIVE) ||
       (!effect.dirty && !immediateFirstRun)
     ) {
       return
     }
-    //  1、有回调函数的情况（watch 模式）
+    //  1、有回调函数的情况（watch 模式）示例 watch(source, cb)
     if (cb) {
-      // watch(source, cb)
-      // 执行 effect.run() 获取当前值作为新值
-      const newValue = effect.run()
+      const newValue = effect.run() // 获取当前值作为新值
       if (
         deep || // 深度监听
         forceTrigger || // 强制触发
@@ -307,22 +300,18 @@ export function watch(
           // 构建回调函数的参数数组
           const args = [
             newValue, // 新值
-            // pass undefined as the old value when it's changed for the first time
-            // 首次执行时为 undefined 或 []，否则为之前的 oldValue
             oldValue === INITIAL_WATCHER_VALUE
-              ? undefined
-              : isMultiSource && oldValue[0] === INITIAL_WATCHER_VALUE
+              ? undefined // 首次执行时为 undefined 或 []
+              : isMultiSource && oldValue[0] === INITIAL_WATCHER_VALUE // 多源 watch 时，旧值为 INITIAL_WATCHER_VALUE 时，为 []
                 ? []
                 : oldValue,
             boundCleanup, // 清理函数
           ]
-          // 更新 oldValue值为 newValue
-          oldValue = newValue
+          oldValue = newValue // 更新 oldValue值为 newValue
           call
             ? call(cb!, WatchErrorCodes.WATCH_CALLBACK, args)
             : // @ts-expect-error
-              // 直接调用回调 函数
-              cb!(...args)
+              cb!(...args) // 直接调用回调函数, 传递参数
         } finally {
           activeWatcher = currentWatcher
         }

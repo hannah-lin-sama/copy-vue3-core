@@ -119,8 +119,8 @@ export class Dep {
   // 示例：当执行 ref.value 会触发依赖收集
   // 建立当前活动的副作用（activeSub）与当前依赖（Dep）之间的双向链接，
   track(debugInfo?: DebuggerEventExtraInfo): Link | undefined {
-    // 当满足以下任一条件时，会直接返回，不进行依赖追踪
-    // 1、没有活动的订阅者
+    // 一、当满足以下任一条件时，会直接返回，不进行依赖追踪
+    // 1、没有活动的订阅者（没有正在运行的副作用（例如在非响应式上下文中访问），不收集）
     // 2、不跟踪依赖
     // 3、订阅者是否为当前依赖关联的计算属性。
     //    作用：防止计算属性的循环依赖。场景：当计算属性的 getter 函数访问自身时，避免形成循环依赖。
@@ -128,6 +128,7 @@ export class Dep {
       return
     }
 
+    // 二、获取或创建当前 dep 与 activeSub 的链接（Link）
     let link = this.activeLink // 当前活动 link
 
     // 没有活动link、或 活动link 不是当前订阅者
@@ -139,7 +140,6 @@ export class Dep {
       // add the link to the activeEffect as a dep (as tail)
       // 将 link 添加到 订阅者的依赖链表
       if (!activeSub.deps) {
-        // 1、此时链表中只有一个节点，头尾指向同一个 link
         activeSub.deps = activeSub.depsTail = link
       } else {
         // 2、如果链表中已经有节点，将 link 添加到链表尾尾
@@ -223,9 +223,6 @@ export class Dep {
       }
       for (let link = this.subs; link; link = link.prevSub) {
         if (link.sub.notify()) {
-          // if notify() returns `true`, this is a computed. Also call notify
-          // on its dep - it's called here instead of inside computed's notify
-          // in order to reduce call stack depth.
           ;(link.sub as ComputedRefImpl).dep.notify()
         }
       }
@@ -256,20 +253,20 @@ function addSub(link: Link) {
       }
     }
 
-    // 获取当前尾部：获取依赖订阅者链表的当前尾部
+    // 获取当前链表的尾部节点（dep.subs 总是指向尾部）
     const currentTail = link.dep.subs
 
-    // 当前链接不是链表尾部
+    // 当前链接不是链表尾部,防止重复添加
     if (currentTail !== link) {
-      link.prevSub = currentTail
-      if (currentTail) currentTail.nextSub = link
+      link.prevSub = currentTail // 设置 link.prevSub 指向原尾部
+      if (currentTail) currentTail.nextSub = link // 将原尾部的 nextSub 指向 link
     }
 
     if (__DEV__ && link.dep.subsHead === undefined) {
       link.dep.subsHead = link
     }
 
-    // 更新尾部指针：将依赖的 subs（订阅者链表尾部）设置为当前链接
+    // 无论是否新增，最终将 dep.subs 设置为 link，使其成为新的尾部。
     link.dep.subs = link
   }
 }
@@ -441,10 +438,8 @@ export function trigger(
         // 删除属性
         case TriggerOpTypes.DELETE:
           if (!targetIsArray) {
-            // 非数组时：触发 ITERATE_KEY
             run(depsMap.get(ITERATE_KEY))
             if (isMap(target)) {
-              // 如果是 Map：触发 MAP_KEY_ITERATE_KEY
               run(depsMap.get(MAP_KEY_ITERATE_KEY))
             }
           }

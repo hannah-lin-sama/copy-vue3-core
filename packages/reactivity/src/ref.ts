@@ -204,8 +204,10 @@ class RefImpl<T = any> {
  * @param ref - The ref whose tied effects shall be executed.
  * @see {@link https://vuejs.org/api/reactivity-advanced.html#triggerref}
  */
+// 强制触发依赖于某个 ref 的所有 effect（即使 ref 的值本身没有变化）
 export function triggerRef(ref: Ref): void {
   // ref may be an instance of ObjectRefImpl
+  // dep 属性检查，确保 ref 是响应式的
   if ((ref as unknown as RefImpl).dep) {
     if (__DEV__) {
       ;(ref as unknown as RefImpl).dep.trigger({
@@ -215,6 +217,7 @@ export function triggerRef(ref: Ref): void {
         newValue: (ref as unknown as RefImpl)._value,
       })
     } else {
+      // 直接调用了 ref 内部的 dep.trigger() 方法，绕过了 set value 的值变化检查
       ;(ref as unknown as RefImpl).dep.trigger()
     }
   }
@@ -266,9 +269,8 @@ export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
  * @param source - A getter, an existing ref, or a non-function value.
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#tovalue}
  */
+// 将可能是 ref、computed 或 getter 函数的值统一转换为其底层的原始值
 export function toValue<T>(source: MaybeRefOrGetter<T>): T {
-  // 如果是 参数source 函数，调用其返回值
-  // 否则，调用 unref 函数返回参数source 本身
   return isFunction(source) ? source() : unref(source)
 }
 
@@ -362,11 +364,15 @@ export type ToRefs<T = any> = {
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#torefs}
  */
 /*@__NO_SIDE_EFFECTS__*/
+// 将响应式对象转换为一个包含 ref 的普通对象，
+// 使得对象的每个属性都变成独立的 ref，同时保持与原对象的响应式连接。
 export function toRefs<T extends object>(object: T): ToRefs<T> {
   if (__DEV__ && !isProxy(object)) {
     warn(`toRefs() expects a reactive object but received a plain one.`)
   }
   const ret: any = isArray(object) ? new Array(object.length) : {}
+
+  // 遍历对象/数组的所有属性，将每个属性转换为 ref
   for (const key in object) {
     ret[key] = propertyToRef(object, key)
   }
@@ -515,8 +521,10 @@ export function toRef(
   key?: string,
   defaultValue?: unknown,
 ): Ref {
+  // 如果 source 是一个 ref 对象，直接返回
   if (isRef(source)) {
     return source
+    // 如果 source 是一个函数，创建一个 getter ref 对象
   } else if (isFunction(source)) {
     return new GetterRefImpl(source) as any
 
@@ -524,10 +532,18 @@ export function toRef(
   } else if (isObject(source) && arguments.length > 1) {
     return propertyToRef(source, key!, defaultValue)
   } else {
+    // 如果 source 是一个普通值，创建一个普通 ref 对象
     return ref(source)
   }
 }
 
+/**
+ * 将对象的单个属性转换为响应式的 Ref 对象
+ * @param source 响应式对象
+ * @param key 属性名
+ * @param defaultValue 默认值
+ * @returns Ref 对象
+ */
 function propertyToRef(
   source: Record<string, any>,
   key: string,
