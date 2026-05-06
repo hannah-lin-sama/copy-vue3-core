@@ -22,6 +22,15 @@ const isNativeOn = (key: string) =>
 
 type DOMRendererOptions = RendererOptions<Node, Element>
 
+/**
+ * 更新 DOM 元素的属性
+ * @param el 渲染元素
+ * @param key 属性名
+ * @param prevValue 旧属性值
+ * @param nextValue 新属性值
+ * @param namespace 元素命名空间
+ * @param parentComponent 父组件实例
+ */
 export const patchProp: DOMRendererOptions['patchProp'] = (
   el,
   key,
@@ -31,19 +40,29 @@ export const patchProp: DOMRendererOptions['patchProp'] = (
   parentComponent,
 ) => {
   const isSVG = namespace === 'svg'
+
+  // 处理 class 属性
   if (key === 'class') {
     patchClass(el, nextValue, isSVG)
+
+    // 处理 style 属性
   } else if (key === 'style') {
     patchStyle(el, prevValue, nextValue)
+
+    // 处理事件属性
   } else if (isOn(key)) {
     // ignore v-model listeners
+    // 忽略 v-model 监听器（由 v-model 指令特殊处理）
     if (!isModelListener(key)) {
       patchEvent(el, key, prevValue, nextValue, parentComponent)
     }
+    // 处理 DOM property
   } else if (
+    // 如果属性名以 '.' 开头，强制作为 property 处理
     key[0] === '.'
       ? ((key = key.slice(1)), true)
-      : key[0] === '^'
+      : // 如果属性名以 '^' 开头，强制作为 attribute 处理
+        key[0] === '^'
         ? ((key = key.slice(1)), false)
         : shouldSetAsProp(el, key, nextValue, isSVG)
   ) {
@@ -51,6 +70,11 @@ export const patchProp: DOMRendererOptions['patchProp'] = (
     // #6007 also set form state as attributes so they work with
     // <input type="reset"> or libs / extensions that expect attributes
     // #11163 custom elements may use value as an prop and set it as object
+    // 排除自定义元素（自定义元素的标签名包含连字符）
+    // 只处理表单元素的三个特殊属性：
+    // value：用于 input、textarea 等元素
+    // checked：用于 checkbox、radio 等元素
+    // selected：用于 option 元素
     if (
       !el.tagName.includes('-') &&
       (key === 'value' || key === 'checked' || key === 'selected')
@@ -68,6 +92,9 @@ export const patchProp: DOMRendererOptions['patchProp'] = (
     // :true-value & :false-value
     // store value as dom properties since non-string values will be
     // stringified.
+    // 于自定义复选框（checkbox）值的特殊属性。
+    // 它们允许开发者为复选框的选中和未选中状态指定自定义的值，而不是默认的布尔值 true 和 false。
+    // 因为非字符串值会被字符串化，存储为 DOM 属性可以保留原始值类型
     if (key === 'true-value') {
       ;(el as any)._trueValue = nextValue
     } else if (key === 'false-value') {

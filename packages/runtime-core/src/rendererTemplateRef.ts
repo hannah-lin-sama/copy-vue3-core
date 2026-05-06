@@ -24,16 +24,18 @@ import { queuePostRenderEffect } from './renderer'
 import { type ComponentOptions, getComponentPublicInstance } from './component'
 import { isTemplateRefKey, knownTemplateRefs } from './helpers/useTemplateRef'
 
+// 存储待处理的模板引用设置任务
 const pendingSetRefMap = new WeakMap<VNodeNormalizedRef, SchedulerJob>()
 /**
  * Function for handling a template ref
+ * 设置、更新或卸载模板引用。它支持多种类型的 ref（字符串、函数、ref 对象）
  */
 export function setRef(
-  rawRef: VNodeNormalizedRef,
-  oldRawRef: VNodeNormalizedRef | null,
-  parentSuspense: SuspenseBoundary | null,
-  vnode: VNode,
-  isUnmount = false,
+  rawRef: VNodeNormalizedRef, // 当前 VNode 的 ref 信息
+  oldRawRef: VNodeNormalizedRef | null, // 旧 VNode 的 ref 信息
+  parentSuspense: SuspenseBoundary | null, // 父级 Suspense 边界
+  vnode: VNode, // 当前 VNode
+  isUnmount = false, // 是否为卸载操作
 ): void {
   if (isArray(rawRef)) {
     rawRef.forEach((r, i) =>
@@ -48,9 +50,11 @@ export function setRef(
     return
   }
 
+  // 异步组件的处理
   if (isAsyncWrapper(vnode) && !isUnmount) {
     // #4999 if an async component already resolved and cached by KeepAlive,
     // we need to set the ref to inner component
+    // 特殊情况：如果异步组件已解析并被 KeepAlive 缓存，需要将 ref 设置到内部组件
     if (
       vnode.shapeFlag & ShapeFlags.COMPONENT_KEPT_ALIVE &&
       (vnode.type as ComponentOptions).__asyncResolved &&
@@ -66,8 +70,10 @@ export function setRef(
 
   const refValue =
     vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT
-      ? getComponentPublicInstance(vnode.component!)
-      : vnode.el
+      ? // 对于有状态组件，获取其公共实例
+        getComponentPublicInstance(vnode.component!)
+      : // 对于普通元素，获取其 DOM 元素
+        vnode.el
   const value = isUnmount ? null : refValue
 
   const { i: owner, r: ref } = rawRef
@@ -82,12 +88,15 @@ export function setRef(
   const refs = owner.refs === EMPTY_OBJ ? (owner.refs = {}) : owner.refs
   const setupState = owner.setupState
   const rawSetupState = toRaw(setupState)
+
+  // 检查是否可以设置 setup ref
   const canSetSetupRef =
     setupState === EMPTY_OBJ
       ? NO
       : (key: string) => {
           if (__DEV__) {
             if (hasOwn(rawSetupState, key) && !isRef(rawSetupState[key])) {
+              // 提示模板引用被用在非 ref 值上，在生产构建中不会工作
               warn(
                 `Template ref "${key}" used on a non-ref value. ` +
                   `It will not work in the production build.`,
@@ -107,7 +116,11 @@ export function setRef(
           return hasOwn(rawSetupState, key)
         }
 
+  // 检查是否可以设置 ref
   const canSetRef = (ref: VNodeRef, key?: string) => {
+    // 条件：
+    // ref 不在 knownTemplateRefs 中
+    // 如果有 key，检查 key 是否来自 useTemplateRef
     if (__DEV__ && knownTemplateRefs.has(ref as any)) {
       return false
     }
@@ -118,13 +131,18 @@ export function setRef(
   }
 
   // dynamic ref changed. unset old ref
+  // 当旧引用存在且与新引用不同时，执行更新逻辑
   if (oldRef != null && oldRef !== ref) {
+    // 取消之前可能存在的待处理的引用设置任务
+    // 原因：当引用发生变化时，需要确保之前的设置操作不会执行，避免状态不一致
     invalidatePendingSetRef(oldRawRef!)
+    // 1、字符串引用的处理
     if (isString(oldRef)) {
       refs[oldRef] = null
       if (canSetSetupRef(oldRef)) {
         setupState[oldRef] = null
       }
+      // 2、ref 对象的处理
     } else if (isRef(oldRef)) {
       // this type assertion is valid since `oldRef` has already been asserted to be non-null
       const oldRawRefAtom = oldRawRef as VNodeNormalizedRefAtom
@@ -209,7 +227,7 @@ export function setRef(
 function invalidatePendingSetRef(rawRef: VNodeNormalizedRef) {
   const pendingSetRef = pendingSetRefMap.get(rawRef)
   if (pendingSetRef) {
-    pendingSetRef.flags! |= SchedulerJobFlags.DISPOSED
-    pendingSetRefMap.delete(rawRef)
+    pendingSetRef.flags! |= SchedulerJobFlags.DISPOSED // 标记为已处置
+    pendingSetRefMap.delete(rawRef) // 从映射中删除，释放内存
   }
 }

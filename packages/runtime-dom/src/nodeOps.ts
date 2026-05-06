@@ -56,6 +56,14 @@ export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
     }
   },
 
+  /**
+   * 创建元素节点
+   * @param tag 元素标签名
+   * @param namespace 命名空间
+   * @param is 自定义元素名称
+   * @param props 元素属性
+   * @returns 创建的元素节点
+   */
   createElement: (tag, namespace, is, props): Element => {
     const el =
       namespace === 'svg'
@@ -64,7 +72,7 @@ export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
           ? doc.createElementNS(mathmlNS, tag)
           : is
             ? doc.createElement(tag, { is })
-            : doc.createElement(tag)
+            : doc.createElement(tag) // 创建普通元素
 
     if (tag === 'select' && props && props.multiple != null) {
       // 处理 select 元素的 multiple 属性
@@ -106,13 +114,17 @@ export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
     // #5308 can only take cached path if:
     // - has a single root node
     // - nextSibling info is still available
+    // start 存在（有缓存的节点）
+    // 且（只有一个节点 start === end，或有多个节点 start.nextSibling 存在）
     if (start && (start === end || start.nextSibling)) {
+      // 缓存路径（cached）
       // cached
       while (true) {
         parent.insertBefore(start!.cloneNode(true), anchor)
         if (start === end || !(start = start!.nextSibling)) break
       }
     } else {
+      // HTML 内容模板（<template>）元素是一种用于保存客户端内容机制，该内容在加载页面时不会呈现到页面上
       // fresh insert
       templateContainer.innerHTML = unsafeToTrustedHTML(
         namespace === 'svg'
@@ -122,7 +134,7 @@ export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
             : content,
       ) as string
 
-      const template = templateContainer.content
+      const template = templateContainer.content // 获取模板内容
       if (namespace === 'svg' || namespace === 'mathml') {
         // remove outer svg/math wrapper
         const wrapper = template.firstChild!
@@ -131,6 +143,7 @@ export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
         }
         template.removeChild(wrapper)
       }
+      // 插入模板内容到父节点中
       parent.insertBefore(template, anchor)
     }
     return [

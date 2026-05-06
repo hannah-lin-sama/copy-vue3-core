@@ -88,20 +88,30 @@ export function createBuffer() {
   }
 }
 
+/**
+ * 渲染组件 VNode 为 SSR Buffer
+ * @param vnode 要渲染的组件 VNode
+ * @param parentComponent 父组件实例，用于创建子组件实例
+ * @param slotScopeId 用于处理插槽作用域的 ID，可选
+ * @returns 包含渲染结果的 SSR Buffer 或 Promise，解析后为 SSR Buffer
+ */
 export function renderComponentVNode(
   vnode: VNode,
   parentComponent: ComponentInternalInstance | null = null,
   slotScopeId?: string,
 ): SSRBuffer | Promise<SSRBuffer> {
+  // 创建组件内部实例
   const instance = (vnode.component = createComponentInstance(
     vnode,
     parentComponent,
     null,
   ))
   if (__DEV__) pushWarningContext(vnode)
+  // 执行组件的 setup() 函数
   const res = setupComponent(instance, true /* isSSR */)
   if (__DEV__) popWarningContext()
   const hasAsyncSetup = isPromise(res)
+  // SERVER_PREFETCH 生命周期钩子，用于在组件渲染前预数据加载
   let prefetches = instance.sp /* LifecycleHooks.SERVER_PREFETCH */
   if (hasAsyncSetup || prefetches) {
     const p: Promise<unknown> = Promise.resolve(res as Promise<void>)
@@ -109,6 +119,7 @@ export function renderComponentVNode(
         // instance.sp may be null until an async setup resolves, so evaluate it here
         if (hasAsyncSetup) prefetches = instance.sp
         if (prefetches) {
+          // 并行执行所有预取函数
           return Promise.all(
             prefetches.map(prefetch => prefetch.call(instance.proxy)),
           )
@@ -116,8 +127,10 @@ export function renderComponentVNode(
       })
       // Note: error display is already done by the wrapped lifecycle hook function.
       .catch(NOOP)
+    // 渲染组件子树
     return p.then(() => renderComponentSubTree(instance, slotScopeId))
   } else {
+    // 同步渲染组件子树
     return renderComponentSubTree(instance, slotScopeId)
   }
 }
