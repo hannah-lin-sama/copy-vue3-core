@@ -116,5 +116,6 @@ export function inject(
  * user. One example is `useRoute()` in `vue-router`.
  */
 export function hasInjectionContext(): boolean {
+  // 当前组件实例或应用上下文存在 → 返回 true
   return !!(getCurrentInstance() || currentApp)
 }

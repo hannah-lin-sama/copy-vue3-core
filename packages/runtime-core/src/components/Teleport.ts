@@ -18,8 +18,11 @@ import { isHmrUpdating } from '../hmr'
 export type TeleportVNode = VNode<RendererNode, RendererElement, TeleportProps>
 
 export interface TeleportProps {
+  // 目标容器选择器或元素实例
   to: string | RendererElement | null | undefined
+  // 是否禁用 Teleport 组件
   disabled?: boolean
+  // 是否延迟渲染 Teleport 组件
   defer?: boolean
 }
 

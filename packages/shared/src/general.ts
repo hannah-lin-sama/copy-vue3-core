@@ -144,6 +144,8 @@ export const toHandlerKey: <T extends string>(
 )
 
 // compare whether a value has changed, accounting for NaN.
+// 示例 Object.is(NaN, NaN) 返回 true
+// 示例 Object.is(+0, -0) 返回 false
 export const hasChanged = (value: any, oldValue: any): boolean =>
   !Object.is(value, oldValue)
 

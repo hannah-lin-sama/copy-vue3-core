@@ -190,6 +190,13 @@ type NormalizedProp = PropOptions & {
 export type NormalizedProps = Record<string, NormalizedProp>
 export type NormalizedPropsOptions = [NormalizedProps, string[]] | []
 
+/**
+ * 初始化组件的 props 和 attrs
+ * @param instance 组件内部实例
+ * @param rawProps 原始 props 数据
+ * @param isStateful 是否为状态组件组件
+ * @param isSSR 是否为服务端渲染组件
+ */
 export function initProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
@@ -205,6 +212,7 @@ export function initProps(
 
   // ensure all declared prop keys are present
   for (const key in instance.propsOptions[0]) {
+    // 确保组件声明的所有 props 键都存在于 props 对象中
     if (!(key in props)) {
       props[key] = undefined
     }
@@ -217,10 +225,11 @@ export function initProps(
 
   if (isStateful) {
     // stateful
-    instance.props = isSSR ? props : shallowReactive(props)
+    instance.props = isSSR ? props : shallowReactive(props) // shallowReactive 创建浅响应式对象，支持响应式更新
   } else {
     if (!instance.type.props) {
       // functional w/ optional props, props === attrs
+      // 函数式组件没有声明 props，props 等同于 attrs
       instance.props = attrs
     } else {
       // functional w/ declared props
@@ -371,6 +380,14 @@ export function updateProps(
   }
 }
 
+/**
+ *
+ * @param instance
+ * @param rawProps
+ * @param props
+ * @param attrs
+ * @returns
+ */
 function setFullProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
@@ -378,7 +395,7 @@ function setFullProps(
   attrs: Data,
 ) {
   const [options, needCastKeys] = instance.propsOptions
-  let hasAttrsChanged = false
+  let hasAttrsChanged = false // 标记 attrs 是否发生变化
   let rawCastValues: Data | undefined
   if (rawProps) {
     for (let key in rawProps) {
@@ -389,12 +406,14 @@ function setFullProps(
 
       if (__COMPAT__) {
         if (key.startsWith('onHook:')) {
+          // Vue 2 生命周期钩子事件的兼容警告
           softAssertCompatEnabled(
             DeprecationTypes.INSTANCE_EVENT_HOOKS,
             instance,
             key.slice(2).toLowerCase(),
           )
         }
+        // 内联模板属性跳过
         if (key === 'inline-template') {
           continue
         }
@@ -405,16 +424,17 @@ function setFullProps(
       // kebab -> camel conversion here we need to camelize the key.
       let camelKey
       if (options && hasOwn(options, (camelKey = camelize(key)))) {
+        // 声明的 props 处理
         if (!needCastKeys || !needCastKeys.includes(camelKey)) {
           props[camelKey] = value
         } else {
+          // 需要转换，先存储原始值
           ;(rawCastValues || (rawCastValues = {}))[camelKey] = value
         }
       } else if (!isEmitListener(instance.emitsOptions, key)) {
-        // Any non-declared (either as a prop or an emitted event) props are put
-        // into a separate `attrs` object for spreading. Make sure to preserve
-        // original key casing
+        //  非声明属性处理（透传 attrs）
         if (__COMPAT__) {
+          // 移除 Native 后缀（Vue 2 兼容）
           if (isOn(key) && key.endsWith('Native')) {
             key = key.slice(0, -6) // remove Native postfix
           } else if (shouldSkipAttr(key, instance)) {
@@ -429,6 +449,7 @@ function setFullProps(
     }
   }
 
+  // 处理转换 （布尔类型、有默认值）
   if (needCastKeys) {
     const rawCurrentProps = toRaw(props)
     const castValues = rawCastValues || EMPTY_OBJ
@@ -506,11 +527,21 @@ function resolvePropValue(
 
 const mixinPropsCache = new WeakMap<ConcreteComponent, NormalizedPropsOptions>()
 
+/**
+ *
+ * @param comp
+ * @param appContext
+ * @param asMixin
+ * @returns
+ */
 export function normalizePropsOptions(
   comp: ConcreteComponent,
   appContext: AppContext,
   asMixin = false,
 ): NormalizedPropsOptions {
+  // 双缓存策略：
+  // 普通组件：使用 appContext.propsCache（应用级缓存）
+  // Mixin 组件：使用 mixinPropsCache（独立缓存）
   const cache =
     __FEATURE_OPTIONS_API__ && asMixin ? mixinPropsCache : appContext.propsCache
   const cached = cache.get(comp)
@@ -520,6 +551,9 @@ export function normalizePropsOptions(
 
   const raw = comp.props
   const normalized: NormalizedPropsOptions[0] = {}
+  // 需要运行时处理的 props
+  // - 布尔类型转换：将 DOM 属性转换为布尔值
+  // - 默认值应用：在 props 未传入时应用默认值
   const needCastKeys: NormalizedPropsOptions[1] = []
 
   // apply mixin/extends props
@@ -555,41 +589,51 @@ export function normalizePropsOptions(
   if (isArray(raw)) {
     for (let i = 0; i < raw.length; i++) {
       if (__DEV__ && !isString(raw[i])) {
+        // 非字符串属性名，发出警告
         warn(`props must be strings when using array syntax.`, raw[i])
       }
-      const normalizedKey = camelize(raw[i])
+      const normalizedKey = camelize(raw[i]) // 转换为驼峰命名法
+
+      // 验证 prop 名称是否合法，禁止使用 Vue 保留属性名
       if (validatePropName(normalizedKey)) {
+        // 值为空对象 EMPTY_OBJ，表示该 prop 接受任意类型，无默认值，不需要强制转换
         normalized[normalizedKey] = EMPTY_OBJ
       }
     }
   } else if (raw) {
     if (__DEV__ && !isObject(raw)) {
+      // 非对象属性名，发出警告
       warn(`invalid props options`, raw)
     }
     for (const key in raw) {
-      const normalizedKey = camelize(key)
+      const normalizedKey = camelize(key) // 转换为驼峰命名法
       if (validatePropName(normalizedKey)) {
         const opt = raw[key]
-        const prop: NormalizedProp = (normalized[normalizedKey] =
-          isArray(opt) || isFunction(opt) ? { type: opt } : extend({}, opt))
-        const propType = prop.type
-        let shouldCast = false
-        let shouldCastTrue = true
 
+        // 示例 title: String	  ==》 { type: String }
+        // 示例 count: [Number, Boolean] ==》	{ type: [Number, Boolean] }
+        // 示例 disabled: { type: Boolean, default: false } ==》	浅拷贝后的 { type: Boolean, default: false }
+        const prop: NormalizedProp = (normalized[normalizedKey] =
+          // 如果 opt 是数组或函数（即只提供了类型），则自动转换为 { type: opt }
+          // 否则（对象形式）则浅拷贝一份，避免原始对象被意外修改
+          isArray(opt) || isFunction(opt) ? { type: opt } : extend({}, opt))
+
+        const propType = prop.type
+        let shouldCast = false // 是否需要进行布尔转换
+        let shouldCastTrue = true // Boolean 优先
+
+        // 示例 props: { age: [Number, String] }
         if (isArray(propType)) {
           for (let index = 0; index < propType.length; ++index) {
             const type = propType[index]
             const typeName = isFunction(type) && type.name
 
+            // 只要类型数组中含有 Boolean，就置为 true
             if (typeName === 'Boolean') {
               shouldCast = true
               break
             } else if (typeName === 'String') {
-              // If we find `String` before `Boolean`, e.g. `[String, Boolean]`,
-              // we need to handle the casting slightly differently. Props
-              // passed as `<Comp checked="">` or `<Comp checked="checked">`
-              // will either be treated as strings or converted to a boolean
-              // `true`, depending on the order of the types.
+              // 如果类型数组中 String 出现在 Boolean 之前，则设为 false
               shouldCastTrue = false
             }
           }
@@ -597,9 +641,11 @@ export function normalizePropsOptions(
           shouldCast = isFunction(propType) && propType.name === 'Boolean'
         }
 
+        // 将两个标志直接挂到 prop 对象上
         prop[BooleanFlags.shouldCast] = shouldCast
         prop[BooleanFlags.shouldCastTrue] = shouldCastTrue
         // if the prop needs boolean casting or default value
+        // 收集需要运行时处理的 props
         if (shouldCast || hasOwn(prop, 'default')) {
           needCastKeys.push(normalizedKey)
         }

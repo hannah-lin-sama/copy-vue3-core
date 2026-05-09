@@ -301,9 +301,11 @@ const shallowUnwrapHandlers: ProxyHandler<any> = {
 export function proxyRefs<T extends object>(
   objectWithRefs: T,
 ): ShallowUnwrapRef<T> {
+  // 如果对象已经是 reactive 的，直接返回
   return isReactive(objectWithRefs)
     ? (objectWithRefs as ShallowUnwrapRef<T>)
-    : new Proxy(objectWithRefs, shallowUnwrapHandlers)
+    : // 创建 Proxy 代理
+      new Proxy(objectWithRefs, shallowUnwrapHandlers)
 }
 
 export type CustomRefFactory<T> = (

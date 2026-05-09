@@ -27,6 +27,12 @@ if (__DEV__) {
 
 const compileCache: Record<string, RenderFunction> = Object.create(null)
 
+/**
+ *
+ * @param template
+ * @param options
+ * @returns
+ */
 function compileToFunction(
   template: string | HTMLElement,
   options?: CompilerOptions,
@@ -46,6 +52,7 @@ function compileToFunction(
     return cached
   }
 
+  // 选择器处理（如 '#app'）
   if (template[0] === '#') {
     const el = document.querySelector(template)
     if (__DEV__ && !el) {
@@ -71,6 +78,7 @@ function compileToFunction(
     opts.isCustomElement = tag => !!customElements.get(tag)
   }
 
+  //  编译模板
   const { code } = compile(template, opts)
 
   function onError(err: CompilerError, asWarning = false) {
@@ -91,11 +99,13 @@ function compileToFunction(
   // with keys that cannot be mangled, and can be quite heavy size-wise.
   // In the global build we know `Vue` is available globally so we can avoid
   // the wildcard object.
+  // 创建渲染函数
   const render = (
     __GLOBAL__ ? new Function(code)() : new Function('Vue', code)(runtimeDom)
   ) as RenderFunction
 
   // mark the function as runtime compiled
+  // 标记为运行时编译
   ;(render as InternalRenderFunction)._rc = true
 
   return (compileCache[key] = render)

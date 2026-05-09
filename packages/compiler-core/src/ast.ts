@@ -53,19 +53,19 @@ export enum NodeTypes {
   JS_CACHE_EXPRESSION, // 20 缓存表达式，用于缓存计算结果
 
   // ssr codegen
-  JS_BLOCK_STATEMENT,
-  JS_TEMPLATE_LITERAL,
-  JS_IF_STATEMENT,
-  JS_ASSIGNMENT_EXPRESSION,
-  JS_SEQUENCE_EXPRESSION,
-  JS_RETURN_STATEMENT,
+  JS_BLOCK_STATEMENT, // 21 JavaScript 代码块语句
+  JS_TEMPLATE_LITERAL, // 22 JavaScript 模板字面量
+  JS_IF_STATEMENT, // 23 JavaScript if 语句
+  JS_ASSIGNMENT_EXPRESSION, // 24 JavaScript 赋值表达式，如 a = b
+  JS_SEQUENCE_EXPRESSION, // 25 JavaScript 序列表达式，对应 expr1, expr2, expr3 语法
+  JS_RETURN_STATEMENT, // 26 JavaScript return 语句
 }
 
 export enum ElementTypes {
-  ELEMENT,
-  COMPONENT,
-  SLOT,
-  TEMPLATE,
+  ELEMENT, // 1 元素节点 ，如 <div>、<span> 等 HTML 元素
+  COMPONENT, // 2 组件节点，如 Vue 组件（<MyComponent>）
+  SLOT, // 3 插槽出口节点，如 <slot> 元素
+  TEMPLATE, // 4 模板节点，如 <template> 元素
 }
 
 export interface Node {

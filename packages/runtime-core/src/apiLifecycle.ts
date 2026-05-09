@@ -43,6 +43,9 @@ export function injectHook(
       (hook.__weh = (...args: unknown[]) => {
         // disable tracking inside all lifecycle hooks
         // since they can potentially be called inside effects.
+        // Vue 在生命周期钩子包装器中显式调用 pauseTracking()，
+        // 是为了确保生命周期钩子内部不会意外收集任何响应式依赖，从而维持生命周期的一次性语义、避免内存泄漏，并提高代码健壮性。
+        // 这是一种防御性编程措施，即使正常情况下没有活跃的副作用，也主动切断依赖追踪。
         pauseTracking() // 暂停响应式依赖追踪
         // Set currentInstance during hook invocation.
         // This assumes the hook does not synchronously trigger other hooks, which

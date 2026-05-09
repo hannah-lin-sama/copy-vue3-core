@@ -263,9 +263,11 @@ const KeepAliveImpl: ComponentOptions = {
         // inner component if available
         const name = getComponentName(
           isAsyncWrapper(vnode)
-            ? (vnode.type as ComponentOptions).__asyncResolved || {}
+            ? // __asyncResolved 中已解析的组件
+              (vnode.type as ComponentOptions).__asyncResolved || {}
             : (vnode.type as ConcreteComponent),
         )
+        // 如果组件有名称且不满足过滤条件 → 清理缓存
         if (name && !filter(name)) {
           pruneCacheEntry(key)
         }

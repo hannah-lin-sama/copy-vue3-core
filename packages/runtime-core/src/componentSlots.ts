@@ -260,9 +260,10 @@ export const initSlots = (
   // 创建内部插槽对象
   const slots = (instance.slots = createInternalObject())
 
-  // 子节点是为插槽对象
+  // 1、说明该 VNode 的子节点就是编译生成的插槽对象（例如使用 <template #header> 编译后产生
   if (instance.vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
     const type = (children as RawSlots)._ // 获取插槽对象的编译标记 _
+    // 如果 _ 存在：说明这些插槽已经是标准化格式
     if (type) {
       // 使用 assignSlots 直接赋值，并在优化模式下设置 _ 为不可枚举
       assignSlots(slots, children as Slots, optimized)
@@ -274,7 +275,8 @@ export const initSlots = (
       // 使用 normalizeObjectSlots 标准化插槽对象
       normalizeObjectSlots(children as RawSlots, slots, instance)
     }
-    // 如果子节点存在但不是插槽对象，使用 normalizeVNodeSlots 将其转换为默认插槽
+
+    //2、此时 children 是一个普通的 VNode 数组或单个 VNode
   } else if (children) {
     normalizeVNodeSlots(instance, children)
   }

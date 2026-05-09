@@ -25,13 +25,21 @@ export type AsyncComponentLoader<T = any> = () => Promise<
 >
 
 export interface AsyncComponentOptions<T = any> {
+  /** 异步组件的加载函数 */
   loader: AsyncComponentLoader<T>
+  /** 加载中显示的组件 */
   loadingComponent?: Component
+  /** 加载失败显示的组件 */
   errorComponent?: Component
+  /** 显示 loading 的延迟时间（默认 200ms） */
   delay?: number
+  /** 超时时间（undefined 表示永不超时） */
   timeout?: number
+  /** 是否可挂起（默认 true） */
   suspensible?: boolean
+  /** SSR 水合策略 */
   hydrate?: HydrationStrategy
+  /** 错误处理函数 */
   onError?: (
     error: Error,
     retry: () => void,
@@ -44,38 +52,41 @@ export const isAsyncWrapper = (i: ComponentInternalInstance | VNode): boolean =>
   !!(i.type as ComponentOptions).__asyncLoader
 
 /*@__NO_SIDE_EFFECTS__*/
+// 定义异步组件
 export function defineAsyncComponent<
   T extends Component = { new (): ComponentPublicInstance },
 >(source: AsyncComponentLoader<T> | AsyncComponentOptions<T>): T {
+  // 如果 source 是一个函数，说明是 loader 函数
   if (isFunction(source)) {
     source = { loader: source }
   }
 
   const {
     loader,
-    loadingComponent,
-    errorComponent,
-    delay = 200,
-    hydrate: hydrateStrategy,
-    timeout, // undefined = never times out
-    suspensible = true,
+    loadingComponent, // 加载中显示的组件
+    errorComponent, // 加载失败显示的组件
+    delay = 200, // 显示 loading 的延迟时间（默认 200ms）
+    hydrate: hydrateStrategy, // SSR 水合策略
+    timeout, // undefined = never times out  超时时间（undefined 表示永不超时）
+    suspensible = true, // 是否可挂起（默认 true）
     onError: userOnError,
   } = source
 
-  let pendingRequest: Promise<ConcreteComponent> | null = null
+  let pendingRequest: Promise<ConcreteComponent> | null = null // 请求复用
   let resolvedComp: ConcreteComponent | undefined
 
-  let retries = 0
+  let retries = 0 // 重试次数
   const retry = () => {
-    retries++
-    pendingRequest = null
+    retries++ // 递增重试计数
+    pendingRequest = null // 重置挂起的请求
     return load()
   }
 
   const load = (): Promise<ConcreteComponent> => {
+    // 当前请求 Promise
     let thisRequest: Promise<ConcreteComponent>
     return (
-      pendingRequest ||
+      pendingRequest || // 请求复用
       (thisRequest = pendingRequest =
         loader()
           .catch(err => {
@@ -90,7 +101,9 @@ export function defineAsyncComponent<
               throw err
             }
           })
+          // 异步组件加载成功后的结果验证和处理
           .then((comp: any) => {
+            // 当前请求不是最新的请求
             if (thisRequest !== pendingRequest && pendingRequest) {
               return pendingRequest
             }
@@ -101,16 +114,20 @@ export function defineAsyncComponent<
               )
             }
             // interop module default
+            // 模块默认导出处理
             if (
               comp &&
+              // comp.__esModule：Babel/TypeScript 编译后的标记
+              // comp[Symbol.toStringTag] === 'Module'：原生 ES Module 标记
               (comp.__esModule || comp[Symbol.toStringTag] === 'Module')
             ) {
               comp = comp.default
             }
+            // 组件必须是对象或函数
             if (__DEV__ && comp && !isObject(comp) && !isFunction(comp)) {
               throw new Error(`Invalid async component load result: ${comp}`)
             }
-            resolvedComp = comp
+            resolvedComp = comp // 缓存已解析的组件
             return comp
           }))
     )
@@ -119,7 +136,7 @@ export function defineAsyncComponent<
   return defineComponent({
     name: 'AsyncComponentWrapper',
 
-    __asyncLoader: load,
+    __asyncLoader: load, // 异步组件加载函数
 
     __asyncHydrate(el, instance, hydrate) {
       let patched = false
@@ -160,9 +177,10 @@ export function defineAsyncComponent<
 
     setup() {
       const instance = currentInstance!
-      markAsyncBoundary(instance)
+      markAsyncBoundary(instance) // 标记异步边界（用于 Suspense 检测）
 
       // already resolved
+      // 处理已缓存的组件（避免重复加载）
       if (resolvedComp) {
         return () => createInnerComp(resolvedComp!, instance)
       }
@@ -178,6 +196,7 @@ export function defineAsyncComponent<
       }
 
       // suspense-controlled or SSR.
+      // Suspense 模式
       if (
         (__FEATURE_SUSPENSE__ && suspensible && instance.suspense) ||
         (__SSR__ && isInSSRComponentSetup)
@@ -197,18 +216,21 @@ export function defineAsyncComponent<
           })
       }
 
-      const loaded = ref(false)
-      const error = ref()
-      const delayed = ref(!!delay)
+      const loaded = ref(false) //加载完成状态
+      const error = ref() // 错误信息
+      const delayed = ref(!!delay) // 延迟显示状态
 
+      // 延迟显示 loading
       if (delay) {
         setTimeout(() => {
-          delayed.value = false
+          delayed.value = false // 延迟显示结束
         }, delay)
       }
 
+      // 超时处理
       if (timeout != null) {
         setTimeout(() => {
+          // 组件未加载完成 且 组件未加载失败
           if (!loaded.value && !error.value) {
             const err = new Error(
               `Async component timed out after ${timeout}ms.`,
@@ -221,10 +243,11 @@ export function defineAsyncComponent<
 
       load()
         .then(() => {
-          loaded.value = true
+          loaded.value = true // 加载完成
           if (instance.parent && isKeepAlive(instance.parent.vnode)) {
             // parent is keep-alive, force update so the loaded component's
             // name is taken into account
+            // 强制更新父组件，当父组件是 KeepAlive 组件时
             instance.parent.update()
           }
         })
@@ -235,12 +258,15 @@ export function defineAsyncComponent<
 
       return () => {
         if (loaded.value && resolvedComp) {
+          // 加载完成，渲染组件
           return createInnerComp(resolvedComp, instance)
         } else if (error.value && errorComponent) {
+          // 加载失败，渲染错误组件
           return createVNode(errorComponent, {
             error: error.value,
           })
         } else if (loadingComponent && !delayed.value) {
+          // 加载中，渲染 loading 组件
           return createInnerComp(
             loadingComponent as ConcreteComponent,
             instance,
@@ -251,18 +277,30 @@ export function defineAsyncComponent<
   }) as T
 }
 
+/**
+ * 创建异步组件的内部组件
+ * - 继承父组件的 ref，确保 ref 能正确指向内部组件
+ * - 继承父组件的 props，保持属性传递
+ * - 继承父组件的 children，保持插槽内容
+ * - 继承自定义元素相关属性
+ * @param comp 异步组件实例
+ * @param parent 父组件实例
+ * @returns 内部组件的 VNode
+ */
 function createInnerComp(
   comp: ConcreteComponent,
   parent: ComponentInternalInstance,
 ) {
   const { ref, props, children, ce } = parent.vnode
+  // 创建内部组件的 VNode，传递父组件的 props、children 信息
   const vnode = createVNode(comp, props, children)
   // ensure inner component inherits the async wrapper's ref owner
+  // 异步包装器的 ref，需要传递给内部组件
   vnode.ref = ref
   // pass the custom element callback on to the inner comp
   // and remove it from the async wrapper
   vnode.ce = ce
-  delete parent.vnode.ce
+  delete parent.vnode.ce // 删除父组件的 ce 属性，避免重复调用
 
   return vnode
 }

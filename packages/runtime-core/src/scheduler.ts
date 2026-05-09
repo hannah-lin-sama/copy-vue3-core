@@ -3,8 +3,8 @@ import { NOOP, isArray } from '@vue/shared'
 import { type ComponentInternalInstance, getComponentName } from './component'
 
 export enum SchedulerJobFlags {
-  QUEUED = 1 << 0,
-  PRE = 1 << 1,
+  QUEUED = 1 << 0, // 1 标记已经加入队列
+  PRE = 1 << 1, // 2 标记任务在 DOM 更新前 执行
   /**
    * Indicates whether the effect is allowed to recursively trigger itself
    * when managed by the scheduler.
@@ -20,8 +20,8 @@ export enum SchedulerJobFlags {
    * responsibility to perform recursive state mutation that eventually
    * stabilizes (#1727).
    */
-  ALLOW_RECURSE = 1 << 2,
-  DISPOSED = 1 << 3,
+  ALLOW_RECURSE = 1 << 2, // 4 允许自身递归
+  DISPOSED = 1 << 3, // 已被销毁或已取消
 }
 
 export interface SchedulerJob extends Function {
@@ -133,17 +133,14 @@ function findInsertionIndex(id: number) {
  * @param job 添加到队列的任务
  */
 export function queueJob(job: SchedulerJob): void {
-  // job 未被标志为QUEUED
+  // 如果任务未被标志为QUEUED，则执行入队操作
   if (!(job.flags! & SchedulerJobFlags.QUEUED)) {
-    // 获取任务的唯一标识符
-    const jobId = getId(job)
-    // 获取当前队列中的最后一个任务
-    const lastJob = queue[queue.length - 1]
+    const jobId = getId(job) // 获取任务的唯一标识符
+    const lastJob = queue[queue.length - 1] // 获取当前队列中的最后一个任务
     // 入队策略：
     // 快速路径：如果队列为空，或者任务没有 PRE 标志且任务 ID 大于等于队尾任务的 ID，则直接将任务推入队列末尾
     if (
       !lastJob ||
-      // fast path when the job id is larger than the tail
       (!(job.flags! & SchedulerJobFlags.PRE) && jobId >= getId(lastJob))
     ) {
       queue.push(job)

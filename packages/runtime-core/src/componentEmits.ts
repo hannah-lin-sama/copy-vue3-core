@@ -118,11 +118,15 @@ export type EmitFn<
           }[Event]
         >
 
+/****
+ * 负责触发组件自定义事件并调用对应的事件处理器
+ */
 export function emit(
-  instance: ComponentInternalInstance,
-  event: string,
-  ...rawArgs: any[]
+  instance: ComponentInternalInstance, // 触发事件的组件实例
+  event: string, // 事件名称（如 'click'、'update:modelValue'）
+  ...rawArgs: any[] // 传递给事件处理器的参数
 ): ComponentPublicInstance | null | undefined {
+  // 组件卸载后不再触发事件，避免内存泄漏和无效操作。
   if (instance.isUnmounted) return
   const props = instance.vnode.props || EMPTY_OBJ
 
@@ -132,6 +136,7 @@ export function emit(
       propsOptions: [propsOptions],
     } = instance
     if (emitsOptions) {
+      // 检查事件是否在 emits 选项中声明
       if (
         !(event in emitsOptions) &&
         !(
@@ -140,6 +145,7 @@ export function emit(
             event.startsWith(compatModelEventPrefix))
         )
       ) {
+        // 检查是否作为 prop handler 存在
         if (!propsOptions || !(toHandlerKey(camelize(event)) in propsOptions)) {
           warn(
             `Component emitted event "${event}" but it is neither declared in ` +
@@ -147,6 +153,7 @@ export function emit(
           )
         }
       } else {
+        // 执行事件参数验证器
         const validator = emitsOptions[event]
         if (isFunction(validator)) {
           const isValid = validator(...rawArgs)
@@ -171,9 +178,11 @@ export function emit(
   // for v-model update:xxx events, apply modifiers on args
   if (modifiers) {
     if (modifiers.trim) {
+      // 自动去除字符串首尾空格
       args = rawArgs.map(a => (isString(a) ? a.trim() : a))
     }
     if (modifiers.number) {
+      // 自动转换为数字
       args = rawArgs.map(looseToNumber)
     }
   }
@@ -184,6 +193,7 @@ export function emit(
 
   if (__DEV__) {
     const lowerCaseEvent = event.toLowerCase()
+    // HTML 属性是大小写不敏感的，在 DOM 模板中使用 @myEvent 会被转换为 @myevent
     if (lowerCaseEvent !== event && props[toHandlerKey(lowerCaseEvent)]) {
       warn(
         `Event "${lowerCaseEvent}" is emitted in component ` +
@@ -201,12 +211,14 @@ export function emit(
   }
 
   let handlerName
+  // 处理器查找优先级： 原始事件名称 -> camelCase 事件名称 -> kebab-case 事件名称
   let handler =
     props[(handlerName = toHandlerKey(event))] ||
     // also try camelCase event handler (#2249)
     props[(handlerName = toHandlerKey(camelize(event)))]
   // for v-model update:xxx events, also trigger kebab-case equivalent
   // for props passed via kebab-case
+  // v-model 事件额外尝试 kebab-case
   if (!handler && isModelListener) {
     handler = props[(handlerName = toHandlerKey(hyphenate(event)))]
   }
@@ -220,11 +232,13 @@ export function emit(
     )
   }
 
+  // 一次性事件处理
   const onceHandler = props[handlerName + `Once`]
   if (onceHandler) {
     if (!instance.emitted) {
       instance.emitted = {}
     } else if (instance.emitted[handlerName]) {
+      // 已触发过，不再执行
       return
     }
     instance.emitted[handlerName] = true
@@ -243,11 +257,22 @@ export function emit(
 }
 
 const mixinEmitsCache = new WeakMap<ConcreteComponent, ObjectEmitsOptions>()
+
+/**
+ * 标准化组件的 emits 选项
+ * @param comp 组件实例
+ * @param appContext 应用上下文
+ * @param asMixin 是否作为混入处理
+ * @returns 标准化后的 emits 选项
+ */
 export function normalizeEmitsOptions(
   comp: ConcreteComponent,
   appContext: AppContext,
   asMixin = false,
 ): ObjectEmitsOptions | null {
+  // 缓存策略：
+  // 普通组件：使用 appContext.emitsCache（应用级缓存）
+  // Mixin 组件：使用 mixinEmitsCache（独立缓存，避免污染应用缓存）
   const cache =
     __FEATURE_OPTIONS_API__ && asMixin ? mixinEmitsCache : appContext.emitsCache
   const cached = cache.get(comp)
@@ -259,6 +284,8 @@ export function normalizeEmitsOptions(
   let normalized: ObjectEmitsOptions = {}
 
   // apply mixin/extends props
+  // 继承优先级（后处理的会覆盖前处理的）：
+  // 全局 mixins → 2. extends → 3. 组件 mixins → 4. 组件自身 emits
   let hasExtends = false
   if (__FEATURE_OPTIONS_API__ && !isFunction(comp)) {
     const extendEmits = (raw: ComponentOptions) => {
@@ -268,12 +295,15 @@ export function normalizeEmitsOptions(
         extend(normalized, normalizedFromExtend)
       }
     }
+    // 全局 mixins（仅非 mixin 模式下应用）
     if (!asMixin && appContext.mixins.length) {
       appContext.mixins.forEach(extendEmits)
     }
+    // extends 继承
     if (comp.extends) {
       extendEmits(comp.extends)
     }
+    // 组件 mixins
     if (comp.mixins) {
       comp.mixins.forEach(extendEmits)
     }
@@ -287,11 +317,13 @@ export function normalizeEmitsOptions(
   }
 
   if (isArray(raw)) {
+    // 数组格式：转换为对象，值为 null
     raw.forEach(key => (normalized[key] = null))
   } else {
     extend(normalized, raw)
   }
 
+  // 仅对对象形式的组件定义进行缓存（函数形式的组件不会被缓存）
   if (isObject(comp)) {
     cache.set(comp, normalized)
   }

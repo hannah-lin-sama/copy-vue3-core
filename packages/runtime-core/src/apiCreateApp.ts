@@ -310,13 +310,18 @@ export function createAppAPI<HostElement>(
         }
       },
 
+      // 安装 Vue 插件
       use(plugin: Plugin, ...options: any[]) {
+        // 检查插件是否已安装
         if (installedPlugins.has(plugin)) {
+          // 如果插件已安装，发出警告
           __DEV__ && warn(`Plugin has already been applied to target app.`)
         } else if (plugin && isFunction(plugin.install)) {
+          // 如果插件是对象类型，且有 install 方法，调用 install 方法
           installedPlugins.add(plugin)
           plugin.install(app, ...options)
         } else if (isFunction(plugin)) {
+          // 如果插件是函数类型，直接调用插件函数
           installedPlugins.add(plugin)
           plugin(app, ...options)
         } else if (__DEV__) {
@@ -344,16 +349,21 @@ export function createAppAPI<HostElement>(
         return app
       },
 
+      // 注册全局组件或获取已注册的组件
       component(name: string, component?: Component): any {
         if (__DEV__) {
           validateComponentName(name, context.config)
         }
         if (!component) {
+          // 如果没有提供组件定义，返回已注册的组件
           return context.components[name]
         }
         if (__DEV__ && context.components[name]) {
+          // 在开发环境下，如果组件已经注册过，发出警告
+          // 避免重复注册组件导致的潜在问题
           warn(`Component "${name}" has already been registered in target app.`)
         }
+        // 将组件注册到应用的组件上下文中
         context.components[name] = component
         return app
       },

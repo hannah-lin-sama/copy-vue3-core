@@ -21,7 +21,7 @@ export type AssetTypes = typeof COMPONENTS | typeof DIRECTIVES | typeof FILTERS
  */
 export function resolveComponent(
   name: string,
-  maybeSelfReference?: boolean,
+  maybeSelfReference?: boolean, // 是否允许自引用
 ): ConcreteComponent | string {
   return resolveAsset(COMPONENTS, name, true, maybeSelfReference) || name
 }
@@ -30,8 +30,10 @@ export const NULL_DYNAMIC_COMPONENT: unique symbol = Symbol.for('v-ndc')
 
 /**
  * @private
+ * 解析动态组件
  */
 export function resolveDynamicComponent(component: unknown): VNodeTypes {
+  // 字符串类型：从组件注册表中查找对应的组件定义
   if (isString(component)) {
     return resolveAsset(COMPONENTS, component, false) || component
   } else {

@@ -60,52 +60,66 @@ import { ErrorCodes, callWithAsyncErrorHandling } from './errorHandling'
 import type { ComponentPublicInstance } from './componentPublicInstance'
 import { isInternalObject } from './internalObject'
 
+// 使用 Symbol.for('v-fgt') 创建的全局符号，用于表示 Fragment 组件
 export const Fragment = Symbol.for('v-fgt') as any as {
   __isFragment: true
   new (): {
     $props: VNodeProps
   }
 }
+// 使用 Symbol.for('v-txt') 创建的全局唯一符号，用于表示文本节点
 export const Text: unique symbol = Symbol.for('v-txt')
+
+// 使用 Symbol.for('v-cmt') 创建的全局唯一符号，用于表示注释节点
 export const Comment: unique symbol = Symbol.for('v-cmt')
+// 使用 Symbol.for('v-stc') 创建的全局唯一符号，用于表示静态节点
 export const Static: unique symbol = Symbol.for('v-stc')
 
 export type VNodeTypes =
-  | string
-  | VNode
-  | Component
-  | typeof Text
-  | typeof Static
-  | typeof Comment
-  | typeof Fragment
+  | string // 表示 HTML 标签名（如 'div'、'span'）或组件名
+  | VNode // 表示嵌套的虚拟节点
+  | Component // 表示组件类型
+  | typeof Text // 表示文本节点
+  | typeof Static // 表示静态节点
+  | typeof Comment // 表示注释节点
+  | typeof Fragment // 表示片段节点，用于多根节点组件
   | typeof Teleport
   | typeof TeleportImpl
   | typeof Suspense
   | typeof SuspenseImpl
 
 export type VNodeRef =
+  // 字符串引用	ref="myRef"
   | string
+  // 响应式引用对象	:ref="myRef"
   | Ref
+  // 回调函数引用	:ref="(el) => { ... }"
   | ((
+      // 当前引用的元素或组件实例，卸载时为 null
       ref: Element | ComponentPublicInstance | null,
+      // 组件的 $refs 对象
       refs: Record<string, any>,
     ) => void)
 
 export type VNodeNormalizedRefAtom = {
   /**
    * component instance
+   * 存储引用所属的组件实例
    */
   i: ComponentInternalInstance
   /**
    * Actual ref
+   * 存储实际的引用值（字符串、函数或 Ref 对象）
    */
   r: VNodeRef
   /**
    * setup ref key
+   * 存储 setup 中使用的 ref key
    */
   k?: string
   /**
    * refInFor marker
+   * 标记是否在 v-for 中使用的引用
    */
   f?: boolean
 }
@@ -400,6 +414,7 @@ export function createBlock(
   )
 }
 
+// 检查值是否为虚拟节点
 export function isVNode(value: any): value is VNode {
   return value ? value.__v_isVNode === true : false
 }
@@ -416,6 +431,7 @@ export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
       return false
     }
   }
+  // 检查节点类型和键是否相同
   return n1.type === n2.type && n1.key === n2.key
 }
 
@@ -448,28 +464,34 @@ const createVNodeWithArgsTransform = (
   )
 }
 
+// 标准化节点键值
 const normalizeKey = ({ key }: VNodeProps): VNode['key'] =>
   key != null ? key : null
 
+// 标准化节点 ref 属性
 const normalizeRef = ({
   ref,
   ref_key,
   ref_for,
 }: VNodeProps): VNodeNormalizedRefAtom | null => {
+  // 处理数字类型的 ref 属性
+  // 将数字转换为字符串，确保 ref 属性是字符串类型
   if (typeof ref === 'number') {
     ref = '' + ref
   }
   return (
     ref != null
       ? isString(ref) || isRef(ref) || isFunction(ref)
-        ? { i: currentRenderingInstance, r: ref, k: ref_key, f: !!ref_for }
+        ? // 处理字符串、引用或函数类型的 ref 属性
+          // 将 ref 属性封装在对象中，包含实例、键值和是否为 for 属性
+          { i: currentRenderingInstance, r: ref, k: ref_key, f: !!ref_for }
         : ref
       : null
   ) as any
 }
 
 /**
- * 创建虚拟节点（VNode）
+ * 创建虚拟节点（VNode）。它是所有 VNode 创建函数的底层实现，负责构建 VNode 对象并设置其各种属性和标志。
  * @param type 虚拟节点的类型，如标签名、组件等
  * @param props 节点的属性对象
  * @param children 节点的子节点
@@ -521,10 +543,13 @@ function createBaseVNode(
     ctx: currentRenderingInstance, // 当前渲染实例，用于访问渲染上下文
   } as VNode
 
+  // 如果需要完全规范化子节点，调用 normalizeChildren 函数
   if (needFullChildrenNormalization) {
     normalizeChildren(vnode, children)
     // normalize suspense children
     if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+      // 调用 SuspenseImpl 类的 normalize 方法
+      // 将 Suspense 组件的子内容分解为 ssContent（主内容）和 ssFallback（回退内容）
       ;(type as typeof SuspenseImpl).normalize(vnode)
     }
   } else if (children) {
@@ -542,6 +567,7 @@ function createBaseVNode(
   }
 
   // track vnode for block tree
+  // 跟踪 VNode 到块树
   if (
     isBlockTreeEnabled > 0 &&
     // avoid a block node from tracking itself
@@ -577,6 +603,16 @@ export const createVNode = (
   __DEV__ ? createVNodeWithArgsTransform : _createVNode
 ) as typeof _createVNode
 
+/**
+ *
+ * @param type
+ * @param props
+ * @param children
+ * @param patchFlag
+ * @param dynamicProps
+ * @param isBlockNode
+ * @returns
+ */
 function _createVNode(
   type: VNodeTypes | ClassComponent | typeof NULL_DYNAMIC_COMPONENT,
   props: (Data & VNodeProps) | null = null,
@@ -585,11 +621,12 @@ function _createVNode(
   dynamicProps: string[] | null = null,
   isBlockNode = false,
 ): VNode {
+  // 处理无效类型
   if (!type || type === NULL_DYNAMIC_COMPONENT) {
     if (__DEV__ && !type) {
       warn(`Invalid vnode type when creating vnode: ${type}.`)
     }
-    type = Comment
+    type = Comment // 转为注释节点
   }
 
   if (isVNode(type)) {
@@ -607,7 +644,7 @@ function _createVNode(
         currentBlock.push(cloned)
       }
     }
-    cloned.patchFlag = PatchFlags.BAIL
+    cloned.patchFlag = PatchFlags.BAIL // 表示需要完全比较
     return cloned
   }
 
@@ -683,6 +720,14 @@ export function guardReactiveProps(
   return isProxy(props) || isInternalObject(props) ? extend({}, props) : props
 }
 
+/**
+ * 克隆一个 VNode 对象
+ * @param vnode
+ * @param extraProps
+ * @param mergeRef
+ * @param cloneTransition
+ * @returns
+ */
 export function cloneVNode<T, U>(
   vnode: VNode<T, U>,
   extraProps?: (Data & VNodeProps) | null,
@@ -725,6 +770,7 @@ export function cloneVNode<T, U>(
     // existing patch flag to be reliable and need to add the FULL_PROPS flag.
     // note: preserve flag for fragments since they use the flag for children
     // fast paths only.
+    // 添加了 extraProps 后，原有 patchFlag 不再可靠，需要强制全量 props diff
     patchFlag:
       extraProps && vnode.type !== Fragment
         ? patchFlag === PatchFlags.CACHED // hoisted node
@@ -790,11 +836,12 @@ export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
 }
 
 /**
+ * 创建静态内容 VNode
  * @private
  */
 export function createStaticVNode(
   content: string,
-  numberOfNodes: number,
+  numberOfNodes: number, // 包含的 DOM 节点数量
 ): VNode {
   // A static vnode can contain multiple stringified elements, and the number
   // of elements is necessary for hydration.
@@ -804,7 +851,11 @@ export function createStaticVNode(
 }
 
 /**
+ * 创建一个注释类型的虚拟节点（VNode）
  * @private
+ * @param text 注释节点的文本内容
+ * @param asBlock 是否将注释节点作为代码块处理
+ * @returns
  */
 export function createCommentVNode(
   text: string = '',
@@ -855,9 +906,11 @@ export function normalizeVNode(child: VNodeChild): VNode {
 
 // optimized normalization for template-compiled render fns
 export function cloneIfMounted(child: VNode): VNode {
+  // VNode 未挂载到 DOM 并且 不是缓存节点
   return (child.el === null && child.patchFlag !== PatchFlags.CACHED) ||
+    // memo 优化节点
     child.memo
-    ? child
+    ? child // 返回原节点
     : cloneVNode(child)
 }
 

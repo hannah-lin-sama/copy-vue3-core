@@ -1745,6 +1745,9 @@ function baseCreateRenderer(
       } else {
         let { next, bu, u, parent, vnode } = instance
 
+        /**
+         * 在 SSR 水合完成前，如果尝试更新一个尚未解析的异步组件，会导致崩溃，因为此时组件的根 DOM 节点还未确定。
+         */
         // 处理 Suspense 相关的异步组件更新
         if (__FEATURE_SUSPENSE__) {
           const nonHydratedAsyncRoot = locateNonHydratedAsyncRoot(instance)
@@ -1752,13 +1755,18 @@ function baseCreateRenderer(
           // this will cause crash because we don't know the root node yet
           if (nonHydratedAsyncRoot) {
             // only sync the properties and abort the rest of operations
+            // 仅同步属性，中止后续操作
             if (next) {
               next.el = vnode.el
+              // 仅更新组件的前置属性（props、slots 等）
               updateComponentPreRender(instance, next, optimized)
             }
             // and continue the rest of operations once the deps are resolved
+            // 等待依赖解析完成后继续操作
             nonHydratedAsyncRoot.asyncDep!.then(() => {
+              // 等待异步依赖解析完成
               // the instance may be destroyed during the time period
+              // 将完整更新放入渲染后队列
               queuePostRenderEffect(() => {
                 if (!instance.isUnmounted) update()
               }, parentSuspense)
@@ -2874,21 +2882,26 @@ function baseCreateRenderer(
   }
 
   /**
-   *
+   * 获取给定 VNode 的下一个宿主节点
    * @param vnode 当前节点
    * @returns 下一个节点
    */
   const getNextHostNode: NextFn = vnode => {
+    // 组件节点：递归获取子树的下一个节点
     if (vnode.shapeFlag & ShapeFlags.COMPONENT) {
       return getNextHostNode(vnode.component!.subTree)
     }
+    // Suspense 节点：通过 suspense 的 next() 方法获取
     if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
       return vnode.suspense!.next()
     }
+    // 普通元素：获取下一个兄弟节点
     const el = hostNextSibling((vnode.anchor || vnode.el)!)
     // #9071, #9313
     // teleported content can mess up nextSibling searches during patch so
     // we need to skip them during nextSibling search
+    // Teleport 处理：跳过 teleport 内容
+    // Teleport 会将内容移动到 DOM 的其他位置
     const teleportEnd = el && el[TeleportEndKey]
     return teleportEnd ? hostNextSibling(teleportEnd) : el
   }
