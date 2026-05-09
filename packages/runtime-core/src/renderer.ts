@@ -2909,7 +2909,8 @@ function baseCreateRenderer(
   let isFlushing = false
 
   /**
-   *
+   * Vue 3 根级别渲染函数，负责将 VNode 渲染到真实 DOM 容器中
+   * 整个渲染流程的入口点
    * @param vnode 要渲染的虚拟节点
    * @param container 渲染目标容器
    * @param namespace 元素命名空间
@@ -2918,10 +2919,12 @@ function baseCreateRenderer(
     let instance
     if (vnode == null) {
       if (container._vnode) {
+        // 卸载
         unmount(container._vnode, null, null, true)
         instance = container._vnode.component
       }
     } else {
+      // 渲染/更新场景
       patch(
         container._vnode || null, // 旧的虚拟节点（如果存在）
         vnode, // 新的虚拟节点
@@ -2932,10 +2935,12 @@ function baseCreateRenderer(
         namespace,
       )
     }
-    container._vnode = vnode
+    container._vnode = vnode // 更新容器引用
     if (!isFlushing) {
       isFlushing = true
+      // 执行预刷新回调（如 watch 的 flush: 'pre'）
       flushPreFlushCbs(instance)
+      // 执行后刷新回调（如 nextTick、过渡效果）
       flushPostFlushCbs()
       isFlushing = false
     }

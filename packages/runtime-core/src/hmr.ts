@@ -39,13 +39,13 @@ if (__DEV__) {
 }
 
 const map: Map<
-  string,
+  string, // 组件的 HMR 唯一标识符
   {
     // the initial component definition is recorded on import - this allows us
     // to apply hot updates to the component even when there are no actively
     // rendered instance.
-    initialDef: ComponentOptions
-    instances: Set<ComponentInternalInstance>
+    initialDef: ComponentOptions // 组件的初始定义对象
+    instances: Set<ComponentInternalInstance> // 该组件的所有活跃实例
   }
 > = new Map()
 
